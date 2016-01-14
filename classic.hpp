@@ -10,7 +10,7 @@ using namespace std;
 
 struct Classic {
 	// we use 3 coordinates proteins (id, enh, inh)
-	typedef Protein<3> Protein;
+	using Protein = Protein<3>;
 	// we need 2 parameters (beta, alpha)
 	static const unsigned int nbParams = 2;
 	// and we produce 2 dimensional signatures (enhnance, inhibit)
@@ -35,7 +35,8 @@ struct Classic {
 	    const Protein &p, const array<double, nbSignatureParams> &influences,
 	    const array<double, nbParams> &params, const int nbP) {
 		double forces = ((influences[0] - influences[1]) / (double)nbP) * params[1];
-		return max(0.0, min(p.c + forces, 1.0));
+		// return max(0.0, min(p.c + forces, 1.0));
+		return p.c + forces;
 	}
 };
 #endif
