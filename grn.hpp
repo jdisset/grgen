@@ -7,24 +7,27 @@
 #include <sstream>
 #include "common.h"
 
-#define PARAMS_MUT_RATE 0.3
-#define MODIF_RATE 0.4
-#define ADD_RATE 0.3
-#define DEL_RATE 0.3
-#define ALIGN_TRESHOLD 0.4
-#define MAX_REGULS 40
-#define APPEND_NON_ALIGNED 0.4
-
 using std::array;
 using std::vector;
 using std::map;
 using std::string;
 using std::pair;
 using std::ostringstream;
-using std::cerr;
-using std::endl;
 
 template <typename Implem> class GRN {
+	struct GAConfiguration {
+		// crossover
+		static constexpr double ALIGN_TRESHOLD = 0.4;
+		static constexpr double APPEND_NON_ALIGNED = 0.4;
+		static constexpr unsigned int MAX_REGULS = 40;
+
+		// mutation
+		double PARAMS_MUT_RATE = 0.3;
+		double MODIF_RATE = 0.4;
+		double ADD_RATE = 0.3;
+		double DEL_RATE = 0.3;
+	};
+
 	template <typename E>
 	static constexpr typename std::underlying_type<E>::type to_underlying(E e) {
 		return static_cast<typename std::underlying_type<E>::type>(e);
@@ -33,6 +36,7 @@ template <typename Implem> class GRN {
  public:
 	using Protein = typename Implem::Protein;
 	using json = nlohmann::json;
+	GAConfiguration config;
 
  protected:
 	array<double, Implem::nbParams> params;   // alpha, beta, ...
@@ -66,6 +70,7 @@ template <typename Implem> class GRN {
 			}
 		}
 	}
+
 	void step(unsigned int nbSteps = 1) {
 		for (auto s = 0u; s < nbSteps; ++s) {
 			array<map<Protein*, Protein>, 3> tmp;  // replacement proteins
@@ -184,7 +189,7 @@ template <typename Implem> class GRN {
 	void mutate() {
 		std::uniform_real_distribution<double> dReal(0.0, 1.0);
 		// mutate params
-		if (dReal(grnRand) < PARAMS_MUT_RATE) {
+		if (dReal(grnRand) < config.PARAMS_MUT_RATE) {
 			std::uniform_int_distribution<int> dInt(0, Implem::nbParams - 1);
 			params[dInt(grnRand)] = dReal(grnRand);
 		}
@@ -193,7 +198,8 @@ template <typename Implem> class GRN {
 			vector<string> reguls = getProteinNames(ProteinType::regul);
 			// mutate 1 protein
 			double dval = dReal(grnRand);
-			if (dval <= MODIF_RATE / (MODIF_RATE + ADD_RATE + DEL_RATE)) {
+			if (dval <=
+			    config.MODIF_RATE / (config.MODIF_RATE + config.ADD_RATE + config.DEL_RATE)) {
 				if (reguls.size() > 0) {
 					std::uniform_int_distribution<int> dInt(0, reguls.size() - 1);
 					int v = dInt(grnRand);
@@ -201,7 +207,8 @@ template <typename Implem> class GRN {
 				}
 			}
 			// ajout
-			else if (dval <= (MODIF_RATE + ADD_RATE) / (MODIF_RATE + ADD_RATE + DEL_RATE)) {
+			else if (dval <= (config.MODIF_RATE + config.ADD_RATE) /
+			                     (config.MODIF_RATE + config.ADD_RATE + config.DEL_RATE)) {
 				ostringstream name;
 				name << "r" << reguls.size();
 				addProtein(ProteinType::regul, name.str(), Protein());
@@ -251,8 +258,8 @@ template <typename Implem> class GRN {
 		map<string, Protein> r1 = g1.proteins[to_underlying(ProteinType::regul)];
 		vector<pair<Protein, Protein>> aligned;  // first = g0's proteins, second = g1's
 		double minDist = 0;
-		while (minDist < ALIGN_TRESHOLD && r0.size() > 0 && r1.size() > 0 &&
-		       aligned.size() < MAX_REGULS) {
+		while (minDist < GAConfiguration::ALIGN_TRESHOLD && r0.size() > 0 && r1.size() > 0 &&
+		       aligned.size() < GAConfiguration::MAX_REGULS) {
 			pair<string, string> closest;
 			minDist = std::numeric_limits<double>::infinity();
 			for (auto i = r0.begin(); i != r0.end(); ++i) {
@@ -264,7 +271,7 @@ template <typename Implem> class GRN {
 					}
 				}
 			}
-			if (minDist < ALIGN_TRESHOLD) {
+			if (minDist < GAConfiguration::ALIGN_TRESHOLD) {
 				aligned.push_back(make_pair(r0.at(closest.first), r1.at(closest.second)));
 				r0.erase(closest.first);
 				r1.erase(closest.second);
@@ -282,8 +289,9 @@ template <typename Implem> class GRN {
 		}
 		// append the rest (about 1/2 chance)
 		for (auto& i : r0) {
-			if (offspring.proteins[to_underlying(ProteinType::regul)].size() < MAX_REGULS) {
-				if (dReal(grnRand) < APPEND_NON_ALIGNED) {
+			if (offspring.proteins[to_underlying(ProteinType::regul)].size() <
+			    GAConfiguration::MAX_REGULS) {
+				if (dReal(grnRand) < GAConfiguration::APPEND_NON_ALIGNED) {
 					ostringstream name;
 					name << "r" << id++;
 					offspring.proteins[to_underlying(ProteinType::regul)][name.str()] = i.second;
@@ -291,8 +299,9 @@ template <typename Implem> class GRN {
 			}
 		}
 		for (auto& i : r1) {
-			if (offspring.proteins[to_underlying(ProteinType::regul)].size() < MAX_REGULS) {
-				if (dReal(grnRand) < APPEND_NON_ALIGNED) {
+			if (offspring.proteins[to_underlying(ProteinType::regul)].size() <
+			    GAConfiguration::MAX_REGULS) {
+				if (dReal(grnRand) < GAConfiguration::APPEND_NON_ALIGNED) {
 					ostringstream name;
 					name << "r" << id++;
 					offspring.proteins[to_underlying(ProteinType::regul)][name.str()] = i.second;
