@@ -29,7 +29,7 @@ template <typename Implem> class GRN {
 	};
 
 	template <typename E>
-	static constexpr typename std::underlying_type<E>::type to_underlying(E e) {
+	inline static constexpr typename std::underlying_type<E>::type to_underlying(E e) {
 		return static_cast<typename std::underlying_type<E>::type>(e);
 	}
 
@@ -108,11 +108,11 @@ template <typename Implem> class GRN {
 	}
 	array<double, Implem::nbParams> getParams() const { return params; }
 	array<map<string, Protein>, 3> getProteins() const { return proteins; }
-	size_t getProteinSize(ProteinType t) const { return proteins[t].size(); }
+	size_t getProteinSize(ProteinType t) const { return proteins[to_underlying(t)].size(); }
 	int getCurrentStep() const { return currentStep; }
 	Protein& getProtein(ProteinType t, const string& name) {
-		assert(proteins[t].count(name) > 0);
-		return proteins[t][name];
+		assert(proteins[to_underlying(t)].count(name) > 0);
+		return proteins[to_underlying(t)][name];
 	}
 	/**************************************
 	 *               SET
@@ -150,11 +150,11 @@ template <typename Implem> class GRN {
 	 *          ADDING PROTEINS
 	 *************************************/
 	void addProtein(const ProteinType t, const string& name, const Protein& p) {
-		proteins[t].insert(make_pair(name, Protein(p)));
+		proteins[to_underlying(t)].insert(make_pair(name, Protein(p)));
 		updateSignatures();
 	}
 	void addRandomProtein(const ProteinType t, const string& name) {
-		proteins[t].insert(make_pair(name, Protein()));
+		proteins[to_underlying(t)].insert(make_pair(name, Protein()));
 	}
 	void addProteins(map<string, Protein>& prots, const ProteinType t) {
 		for (auto& p : prots) {
@@ -272,7 +272,8 @@ template <typename Implem> class GRN {
 				}
 			}
 			if (minDist < GAConfiguration::ALIGN_TRESHOLD) {
-				aligned.push_back(make_pair(r0.at(closest.first), r1.at(closest.second)));
+				aligned.push_back(
+				    pair<Protein, Protein>(r0.at(closest.first), r1.at(closest.second)));
 				r0.erase(closest.first);
 				r1.erase(closest.second);
 			}
