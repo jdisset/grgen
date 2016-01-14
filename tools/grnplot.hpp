@@ -5,16 +5,17 @@
 #include <vector>
 #include <string>
 #include <functional>
-#include "../core/common.h"
+#include <utility>
+#include "../common.h"
 
 template <typename GRN>
 void plot(const std::function<void(GRN &g)> &updtFunc, GRN &grn, const int nbSteps,
           const std::string &name) {
-	std::vector<std::string> outNames = grn.getProteinNames(output);
+	std::vector<std::string> outNames = grn.getProteinNames(ProteinType::output);
 	std::map<std::string, std::vector<std::pair<double, double>>> outputs;
 	for (double i = 0.0; i < static_cast<double>(nbSteps); ++i) {
-		for (auto &name : outNames) {
-			outputs[name].push_back(make_pair(i, grn.getProteinConcentration(name, output)));
+		for (auto &pname : outNames) {
+			outputs[pname].push_back(std::make_pair(i, grn.getProteinConcentration(pname, ProteinType::output)));
 		}
 		updtFunc(grn);
 	}
