@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <array>
 #include <map>
+#include <unordered_map>
 #include <string>
 #include <sstream>
 #include "common.h"
@@ -22,28 +23,29 @@ template <typename Implem> class GRN {
 		static constexpr unsigned int MAX_REGULS = 40;
 
 		// mutation
-		double PARAMS_MUT_RATE = 0.3;
-		double MODIF_RATE = 0.4;
+		double PARAMS_MUT_RATE = 0.4;
+		double MODIF_RATE = 0.6;
 		double ADD_RATE = 0.3;
-		double DEL_RATE = 0.3;
+		double DEL_RATE = 0.28;
 	};
 
-	template <typename E>
-	inline static constexpr typename std::underlying_type<E>::type to_underlying(E e) {
-		return static_cast<typename std::underlying_type<E>::type>(e);
-	}
+	friend Implem;
 
  public:
-	using Protein = typename Implem::Protein;
+	using Protein = typename Implem::Protein_t;
 	using json = nlohmann::json;
+	using InfluenceVec = array<double, Implem::nbSignatureParams>;
+	template <typename A, typename B> using umap = std::unordered_map<A, B>;
 	GAConfiguration config;
 
  protected:
-	array<double, Implem::nbParams> params;   // alpha, beta, ...
-	array<map<string, Protein>, 3> proteins;  // the actual proteins
-	map<Protein*, map<Protein*, array<double, Implem::nbSignatureParams>>>
-	    signatures;  // stores the influence of one protein onto the others
+	array<double, Implem::nbParams> params;    // alpha, beta, ...
+	array<umap<string, Protein>, 3> proteins;  // the actual proteins
+	umap<Protein*, umap<Protein*, InfluenceVec>>
+	    signatures;  // stores the influence of one protein onto the others (p0 influences
+	                 // p1 with value [p0][p1])
 	int currentStep = 0;
+	Implem implem;
 
  public:
 	GRN() { updateSignatures(); }
@@ -52,53 +54,12 @@ template <typename Implem> class GRN {
 	    : params(grn.params), proteins(grn.proteins), currentStep(grn.currentStep) {
 		updateSignatures();
 	}
-
 	/**************************************
 	 *          UPDATES
 	 *************************************/
-	void updateSignatures() {
-		signatures.clear();
-		for (size_t t0 = 0; t0 < proteins.size(); ++t0) {
-			for (auto& p0 : proteins[t0]) {
-				map<Protein*, array<double, Implem::nbSignatureParams>> tmp;
-				for (size_t t1 = 0; t1 < proteins.size(); ++t1) {
-					for (auto& p1 : proteins[t1]) {
-						tmp[&(p1.second)] = Implem::getInfluence(p0.second, p1.second, params);
-					}
-				}
-				signatures[&(p0.second)] = tmp;
-			}
-		}
-	}
+	void updateSignatures() { implem.updateSignatures(*this); }
 
-	void step(unsigned int nbSteps = 1) {
-		for (auto s = 0u; s < nbSteps; ++s) {
-			array<map<Protein*, Protein>, 3> tmp;  // replacement proteins
-			for (size_t t0 = to_underlying(ProteinType::regul); t0 < proteins.size(); ++t0) {
-				for (auto& p0 : proteins[t0]) {
-					array<double, Implem::nbSignatureParams> influence{};
-					double n = 0;
-					for (size_t t1 = 0; t1 < to_underlying(ProteinType::output); ++t1) {
-						for (auto& p1 : proteins[t1]) {
-							for (size_t i = 0; i < influence.size(); ++i) {
-								influence[i] +=
-								    p1.second.c * signatures.at(&p1.second).at(&p0.second).at(i);
-							}
-							++n;
-						}
-					}
-					tmp[t0][&p0.second].c =
-					    Implem::computeNewConcentration(p0.second, influence, params, n);
-				}
-			}
-			for (size_t t0 = to_underlying(ProteinType::regul); t0 < proteins.size(); ++t0) {
-				for (auto& p0 : proteins[t0]) {
-					p0.second.prevc = p0.second.c;
-					p0.second.c = tmp[t0].at(&p0.second).c;
-				}
-			}
-		}
-	}
+	void step(unsigned int nbSteps = 1) { implem.step(*this, nbSteps); }
 
 	/**************************************
 	 *               GET
@@ -108,7 +69,14 @@ template <typename Implem> class GRN {
 	}
 	array<double, Implem::nbParams> getParams() const { return params; }
 	array<map<string, Protein>, 3> getProteins() const { return proteins; }
-	size_t getProteinSize(ProteinType t) const { return proteins[to_underlying(t)].size(); }
+	inline size_t getProteinSize(ProteinType t) const {
+		return proteins[to_underlying(t)].size();
+	}
+	size_t getNbProteins() const {
+		size_t n = 0;
+		for (const auto& i : proteins) n += i.size();
+		return n;
+	}
 	int getCurrentStep() const { return currentStep; }
 	Protein& getProtein(ProteinType t, const string& name) {
 		assert(proteins[to_underlying(t)].count(name) > 0);
@@ -156,7 +124,7 @@ template <typename Implem> class GRN {
 	void addRandomProtein(const ProteinType t, const string& name) {
 		proteins[to_underlying(t)].insert(make_pair(name, Protein()));
 	}
-	void addProteins(map<string, Protein>& prots, const ProteinType t) {
+	void addProteins(umap<string, Protein>& prots, const ProteinType t) {
 		for (auto& p : prots) {
 			addProtein(t, p.first, p.second);
 		}
@@ -174,7 +142,7 @@ template <typename Implem> class GRN {
 	}
 	void updateRegulNames() {
 		int id = 0;
-		map<string, Protein> newReguls;
+		umap<string, Protein> newReguls;
 		for (auto& i : proteins[to_underlying(ProteinType::regul)]) {
 			ostringstream name;
 			name << "r" << id++;
@@ -190,8 +158,12 @@ template <typename Implem> class GRN {
 		std::uniform_real_distribution<double> dReal(0.0, 1.0);
 		// mutate params
 		if (dReal(grnRand) < config.PARAMS_MUT_RATE) {
+			array<pair<double, double>, Implem::nbParams> limits = Implem::paramsLimits();
 			std::uniform_int_distribution<int> dInt(0, Implem::nbParams - 1);
-			params[dInt(grnRand)] = dReal(grnRand);
+			size_t mutParam = dInt(grnRand);
+			std::uniform_real_distribution<double> distrib(limits[mutParam].first,
+			                                               limits[mutParam].second);
+			params[mutParam] = distrib(grnRand);
 		}
 		// mutate proteins
 		else {
@@ -228,6 +200,24 @@ template <typename Implem> class GRN {
 	}
 
 	GRN crossover(const GRN& other) { return GRN::crossover(*this, other); }
+
+	static double computeDistance(const GRN& g0, const GRN& g1) {
+		// a rough measure of the distance between 2 grn
+		int pclones = 0;
+		for (auto t = 0u; t < 3; ++t) {
+			for (const auto& pr0 : g0.proteins[t]) {
+				for (const auto& pr1 : g1.proteins[t]) {
+					if (Protein::areSame(pr0.second, pr1.second)) {
+						++pclones;
+						break;
+					}
+				}
+			}
+		}
+		return 1.0 - (static_cast<double>(pclones) * 2.0 /
+		              (g0.getNbProteins() + g1.getNbProteins()));
+	}
+
 	static GRN crossover(const GRN& g0, const GRN& g1) {
 		assert(g0.proteins.size() == g1.proteins.size());
 		assert(g0.params.size() == g1.params.size());
@@ -254,8 +244,8 @@ template <typename Implem> class GRN {
 			if (d5050(grnRand))
 				offspring.proteins[to_underlying(ProteinType::output)][i.first] = i.second;
 		// find closest pairs
-		map<string, Protein> r0 = g0.proteins[to_underlying(ProteinType::regul)];
-		map<string, Protein> r1 = g1.proteins[to_underlying(ProteinType::regul)];
+		umap<string, Protein> r0 = g0.proteins[to_underlying(ProteinType::regul)];
+		umap<string, Protein> r1 = g1.proteins[to_underlying(ProteinType::regul)];
 		vector<pair<Protein, Protein>> aligned;  // first = g0's proteins, second = g1's
 		double minDist = 0;
 		while (minDist < GAConfiguration::ALIGN_TRESHOLD && r0.size() > 0 && r1.size() > 0 &&

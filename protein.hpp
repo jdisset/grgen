@@ -21,6 +21,12 @@ struct Protein {
 	double c = INIT_CONCENTRATION;      // current concentration
 	double prevc = INIT_CONCENTRATION;  // previous concentration
 
+	static bool areSame(const Protein &p0, const Protein &p1) {
+		for (size_t i = 0; i < nbCoords; ++i)
+			if (p0.coords[i] != p1.coords[i]) return false;
+		return true;
+	}
+
 	// switching between integral or real random distribution
 	template <typename T = CoordsType>
 	typename std::enable_if<!std::is_integral<T>::value, T>::type getRandomCoord() {
@@ -47,8 +53,10 @@ struct Protein {
 		assert(coordsArray.size() == nbCoords);
 		size_t i = 0;
 		for (auto &co : coordsArray) {
-			// values are stored in hex
-			sscanf(co.get<std::string>().c_str(), "%lf", &coords[i++]);
+			// values are stored in hexadecimal
+			double buf;
+			sscanf(co.get<std::string>().c_str(), "%lf", &buf);
+			coords[i++] = static_cast<CoordsType>(buf);
 		}
 	}
 
@@ -74,11 +82,15 @@ struct Protein {
 		json coordsArray;
 		for (auto &co : coords) {
 			char buf[50];
-			snprintf(buf, sizeof(buf), "%a", co);
+			snprintf(buf, sizeof(buf), "%a", static_cast<double>(co));
 			coordsArray.push_back(buf);
 		}
 		o["coords"] = coordsArray;
 		return o;
+	}
+
+	static constexpr double getMaxDistance() {
+		return sqrt((maxCoord - minCoord) * (maxCoord - minCoord) * nbCoords);
 	}
 
 	double getDistanceWith(const Protein &p) {
@@ -87,7 +99,7 @@ struct Protein {
 			sum +=
 			    pow(static_cast<double>(coords.at(i)) - static_cast<double>(p.coords.at(i)), 2);
 		}
-		return sqrt(sum);
+		return sqrt(sum) / getMaxDistance();
 	}
 };
 #endif
