@@ -11,9 +11,8 @@
 using namespace std;
 
 struct Classic {
-
 	// we use 3 coordinates proteins (id, enh, inh)
-	static constexpr int IDSIZE = 32;
+	static constexpr int IDSIZE = 16;
 	using Protein_t = Protein<3, int, 0, IDSIZE>;
 
 	// we need 2 parameters (beta, alpha)
@@ -75,7 +74,7 @@ struct Classic {
 						for (auto& pr1 : grn.proteins[t1]) {
 							Protein_t* p1 = &pr1.second;
 							for (size_t i = 0; i < influence.size(); ++i) {
-								influence[i] += p1->c * grn.signatures.at(p1).at(p0).at(i);
+								influence[i] += p1->c * grn.signatures.at(p0).at(p1).at(i);
 							}
 							++n;
 						}

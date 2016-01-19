@@ -23,10 +23,9 @@ template <typename Implem> class GRN {
 		static constexpr unsigned int MAX_REGULS = 40;
 
 		// mutation
-		double PARAMS_MUT_RATE = 0.4;
-		double MODIF_RATE = 0.6;
-		double ADD_RATE = 0.3;
-		double DEL_RATE = 0.28;
+		double MODIF_RATE = 0.5;
+		double ADD_RATE = 0.25;
+		double DEL_RATE = 0.25;
 	};
 
 	friend Implem;
@@ -157,7 +156,7 @@ template <typename Implem> class GRN {
 	void mutate() {
 		std::uniform_real_distribution<double> dReal(0.0, 1.0);
 		// mutate params
-		if (dReal(grnRand) < config.PARAMS_MUT_RATE) {
+		if (dReal(grnRand) < config.MODIF_RATE / static_cast<double>(getNbProteins())) {
 			array<pair<double, double>, Implem::nbParams> limits = Implem::paramsLimits();
 			std::uniform_int_distribution<int> dInt(0, Implem::nbParams - 1);
 			size_t mutParam = dInt(grnRand);
