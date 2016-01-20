@@ -23,9 +23,10 @@ template <typename Implem> class GRN {
 		static constexpr unsigned int MAX_REGULS = 40;
 
 		// mutation
-		double MODIF_RATE = 0.5;
-		double ADD_RATE = 0.25;
-		double DEL_RATE = 0.25;
+		double PARAMS_MUT_RATE = 0.1;
+		double MODIF_RATE = 0.6;
+		double ADD_RATE = 0.2;
+		double DEL_RATE = 0.2;
 	};
 
 	friend Implem;
@@ -157,7 +158,8 @@ template <typename Implem> class GRN {
 		std::uniform_real_distribution<double> dReal(0.0, 1.0);
 		// mutate params
 		if (dReal(grnRand) < config.MODIF_RATE / static_cast<double>(getNbProteins())) {
-			array<pair<double, double>, Implem::nbParams> limits = Implem::paramsLimits();
+			// if (dReal(grnRand) < config.PARAMS_MUT_RATE) {
+			auto limits = Implem::paramsLimits();
 			std::uniform_int_distribution<int> dInt(0, Implem::nbParams - 1);
 			size_t mutParam = dInt(grnRand);
 			std::uniform_real_distribution<double> distrib(limits[mutParam].first,
@@ -172,9 +174,14 @@ template <typename Implem> class GRN {
 			if (dval <=
 			    config.MODIF_RATE / (config.MODIF_RATE + config.ADD_RATE + config.DEL_RATE)) {
 				if (reguls.size() > 0) {
-					std::uniform_int_distribution<int> dInt(0, reguls.size() - 1);
-					int v = dInt(grnRand);
-					proteins[to_underlying(ProteinType::regul)][reguls[v]].mutate();
+					// std::uniform_int_distribution<int> dInt(0, reguls.size() - 1);
+					// int v = dInt(grnRand);
+					// proteins[to_underlying(ProteinType::regul)][reguls[v]].mutate();
+					for (auto& r : proteins[to_underlying(ProteinType::regul)]) {
+						if (dReal(grnRand) <= 1.0 / static_cast<double>(reguls.size())) {
+							r.second.mutate();
+						}
+					}
 				}
 			}
 			// ajout
@@ -331,7 +338,7 @@ template <typename Implem> class GRN {
 		json parArray;
 		for (auto& p : params) {
 			char buf[50];
-			snprintf(buf, sizeof(buf), "%a", p);
+			snprintf(buf, sizeof(buf), "%f", p);
 			parArray.push_back(buf);
 		}
 		json protObj;
@@ -345,7 +352,7 @@ template <typename Implem> class GRN {
 		json o;
 		o["proteins"] = protObj;
 		o["params"] = parArray;
-		return o.dump();
+		return o.dump(2);
 	}
 
 	std::string typeToString(ProteinType t) const {

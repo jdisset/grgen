@@ -12,7 +12,7 @@ using namespace std;
 
 struct Classic {
 	// we use 3 coordinates proteins (id, enh, inh)
-	static constexpr int IDSIZE = 16;
+	static constexpr int IDSIZE = 32;
 	using Protein_t = Protein<3, int, 0, IDSIZE>;
 
 	// we need 2 parameters (beta, alpha)

@@ -82,7 +82,7 @@ struct Protein {
 		json coordsArray;
 		for (auto &co : coords) {
 			char buf[50];
-			snprintf(buf, sizeof(buf), "%a", static_cast<double>(co));
+			snprintf(buf, sizeof(buf), "%f", static_cast<double>(co));
 			coordsArray.push_back(buf);
 		}
 		o["coords"] = coordsArray;
@@ -90,14 +90,14 @@ struct Protein {
 	}
 
 	static constexpr double getMaxDistance() {
-		return sqrt((maxCoord - minCoord) * (maxCoord - minCoord) * nbCoords);
+		return sqrt(std::pow((maxCoord - minCoord), 2) * nbCoords);
 	}
 
 	double getDistanceWith(const Protein &p) {
 		double sum = 0;
 		for (size_t i = 0; i < nbCoords; ++i) {
-			sum +=
-			    pow(static_cast<double>(coords.at(i)) - static_cast<double>(p.coords.at(i)), 2);
+			sum += std::pow(
+			    static_cast<double>(coords.at(i)) - static_cast<double>(p.coords.at(i)), 2);
 		}
 		return sqrt(sum) / getMaxDistance();
 	}
