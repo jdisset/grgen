@@ -82,7 +82,7 @@ struct Protein {
 		json coordsArray;
 		for (auto &co : coords) {
 			char buf[50];
-			snprintf(buf, sizeof(buf), "%f", static_cast<double>(co));
+			snprintf(buf, sizeof(buf), "%a", static_cast<double>(co));
 			coordsArray.push_back(buf);
 		}
 		o["coords"] = coordsArray;

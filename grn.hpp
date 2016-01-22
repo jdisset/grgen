@@ -338,7 +338,7 @@ template <typename Implem> class GRN {
 		json parArray;
 		for (auto& p : params) {
 			char buf[50];
-			snprintf(buf, sizeof(buf), "%f", p);
+			snprintf(buf, sizeof(buf), "%a", p);
 			parArray.push_back(buf);
 		}
 		json protObj;
