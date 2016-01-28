@@ -320,7 +320,7 @@ template <typename Implem> class GRN {
 		size_t i = 0;
 		for (auto& p : par) {
 			double v;
-			sscanf(p.get<string>().c_str(), "%lf", &v);
+			sscanf(p.get<string>().c_str(), "%la", &v);
 			params[i++] = v;
 		}
 		assert(o.count("proteins"));
@@ -331,7 +331,9 @@ template <typename Implem> class GRN {
 				proteins[t][it.key()] = Protein(it.value());
 			}
 		}
+		std::cerr<<"uodating signatures"<<std::endl;
 		updateSignatures();
+		std::cerr<<"everything ko"<<std::endl;
 	}
 
 	string toJSON() const {
