@@ -68,7 +68,7 @@ template <typename Implem> class GRN {
 		return proteins.at((size_t)t).at(name).c;
 	}
 	array<double, Implem::nbParams> getParams() const { return params; }
-	array<map<string, Protein>, 3> getProteins() const { return proteins; }
+	array<std::unordered_map<string, Protein>, 3> getProteins() const { return proteins; }
 	inline size_t getProteinSize(ProteinType t) const {
 		return proteins[to_underlying(t)].size();
 	}
@@ -331,9 +331,9 @@ template <typename Implem> class GRN {
 				proteins[t][it.key()] = Protein(it.value());
 			}
 		}
-		std::cerr<<"uodating signatures"<<std::endl;
+		std::cerr << "uodating signatures" << std::endl;
 		updateSignatures();
-		std::cerr<<"everything ko"<<std::endl;
+		std::cerr << "everything ko" << std::endl;
 	}
 
 	string toJSON() const {
