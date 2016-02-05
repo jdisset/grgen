@@ -331,9 +331,7 @@ template <typename Implem> class GRN {
 				proteins[t][it.key()] = Protein(it.value());
 			}
 		}
-		std::cerr << "uodating signatures" << std::endl;
 		updateSignatures();
-		std::cerr << "everything ko" << std::endl;
 	}
 
 	string toJSON() const {
