@@ -54,6 +54,7 @@ template <typename Implem> class GRN {
 	    : params(grn.params), proteins(grn.proteins), currentStep(grn.currentStep) {
 		updateSignatures();
 	}
+
 	/**************************************
 	 *          UPDATES
 	 *************************************/
@@ -65,23 +66,44 @@ template <typename Implem> class GRN {
 	 *               GET
 	 *************************************/
 	double getProteinConcentration(const string& name, const ProteinType t) const {
-		return proteins.at((size_t)t).at(name).c;
+		try {
+			return proteins.at(to_underlying(t)).at(name).c;
+		} catch (...) {
+			std::cerr << "Exception raised in getProteinConcentration for name = " << name
+			          << ", proteintype = " << to_underlying(t) << std::endl;
+			std::cerr << "proteins map = ";
+			for (auto& m : proteins) {
+				std::cerr << std::endl << "[ ";
+				for (auto& p : m) {
+					std::cerr << std::endl << "    " << p.first;
+				}
+				std::cerr << std::endl << "]";
+			}
+			exit(0);
+		}
 	}
+
 	array<double, Implem::nbParams> getParams() const { return params; }
+
 	array<std::unordered_map<string, Protein>, 3> getProteins() const { return proteins; }
+
 	inline size_t getProteinSize(ProteinType t) const {
 		return proteins[to_underlying(t)].size();
 	}
+
 	size_t getNbProteins() const {
 		size_t n = 0;
 		for (const auto& i : proteins) n += i.size();
 		return n;
 	}
+
 	int getCurrentStep() const { return currentStep; }
+
 	Protein& getProtein(ProteinType t, const string& name) {
 		assert(proteins[to_underlying(t)].count(name) > 0);
 		return proteins[to_underlying(t)][name];
 	}
+
 	/**************************************
 	 *               SET
 	 *************************************/
@@ -92,12 +114,15 @@ template <typename Implem> class GRN {
 			}
 		}
 	}
+
 	void setParam(size_t i, double val) {
 		if (i < params.size()) params[i] = val;
 	}
+
 	void setProteinConcentration(const string& name, ProteinType t, double c) {
 		proteins[(size_t)t][name].c = c;
 	}
+
 	vector<string> getProteinNames(ProteinType t) const {
 		vector<string> res;
 		for (auto& p : proteins[(size_t)t]) {
@@ -114,6 +139,7 @@ template <typename Implem> class GRN {
 		}
 		updateSignatures();
 	}
+
 	/**************************************
 	 *          ADDING PROTEINS
 	 *************************************/
@@ -121,14 +147,17 @@ template <typename Implem> class GRN {
 		proteins[to_underlying(t)].insert(make_pair(name, Protein(p)));
 		updateSignatures();
 	}
+
 	void addRandomProtein(const ProteinType t, const string& name) {
 		proteins[to_underlying(t)].insert(make_pair(name, Protein()));
 	}
+
 	void addProteins(umap<string, Protein>& prots, const ProteinType t) {
 		for (auto& p : prots) {
 			addProtein(t, p.first, p.second);
 		}
 	}
+
 	void randomReguls(size_t n) {
 		ostringstream name;
 		proteins[to_underlying(ProteinType::regul)].clear();
@@ -140,6 +169,7 @@ template <typename Implem> class GRN {
 		}
 		updateSignatures();
 	}
+
 	void updateRegulNames() {
 		int id = 0;
 		umap<string, Protein> newReguls;
