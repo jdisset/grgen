@@ -52,12 +52,7 @@ struct Protein {
 		json coordsArray = o.at("coords");
 		assert(coordsArray.size() == nbCoords);
 		size_t i = 0;
-		for (auto &co : coordsArray) {
-			// values are stored in hexadecimal
-			double buf;
-			sscanf(co.get<std::string>().c_str(), "%lf", &buf);
-			coords[i++] = static_cast<CoordsType>(buf);
-		}
+		for (auto &co : coordsArray) coords[i++] = co.get<CoordsType>();
 	}
 
 	void reset() {
@@ -79,13 +74,7 @@ struct Protein {
 
 	json toJSON() const {
 		json o;
-		json coordsArray;
-		for (auto &co : coords) {
-			char buf[50];
-			snprintf(buf, sizeof(buf), "%a", static_cast<double>(co));
-			coordsArray.push_back(buf);
-		}
-		o["coords"] = coordsArray;
+		o["coords"] = coords;
 		return o;
 	}
 

@@ -39,11 +39,12 @@ template <typename Implem> class GRN {
 	GAConfiguration config;
 
  protected:
-	array<double, Implem::nbParams> params;    // alpha, beta, ...
-	array<umap<string, Protein>, 3> proteins;  // the actual proteins
-	umap<Protein*, umap<Protein*, InfluenceVec>>
-	    signatures;  // stores the influence of one protein onto the others (p0 influences
-	                 // p1 with value [p0][p1])
+	array<double, Implem::nbParams> params;  // alpha, beta, ...
+	array<umap<string, size_t>, 3> proteinsRefs;
+	vector<Protein> actualProteins;
+	vector<vector<InfluenceVec>>
+	    signatures;  // stores the influence of one protein onto the others (p0
+	// influences
 	int currentStep = 0;
 	Implem implem;
 
@@ -51,68 +52,75 @@ template <typename Implem> class GRN {
 	GRN() { updateSignatures(); }
 
 	GRN(const GRN& grn)
-	    : params(grn.params), proteins(grn.proteins), currentStep(grn.currentStep) {
+	    : params(grn.params),
+	      proteinsRefs(grn.proteinsRefs),
+	      actualProteins(grn.actualProteins),
+	      currentStep(grn.currentStep) {
 		updateSignatures();
 	}
 
 	/**************************************
 	 *          UPDATES
 	 *************************************/
-	void updateSignatures() { implem.updateSignatures(*this); }
+	void updateSignatures() {
+		// first we order all proteins (inputs | reguls | outputs)
+		vector<size_t> orderedID;
+		for (auto& t : proteinsRefs) {
+			for (auto& p : t) {
+				orderedID.push_back(p.second);
+				p.second = orderedID.size() - 1;
+			}
+		}
+		assert(orderedID.size() == actualProteins.size());
+		auto buffer = actualProteins;
+		for (size_t i = 0; i < actualProteins.size(); ++i) {
+			actualProteins[i] = buffer[orderedID[i]];
+		}
+		implem.updateSignatures(*this);
+	}
 
 	void step(unsigned int nbSteps = 1) { implem.step(*this, nbSteps); }
 
 	/**************************************
 	 *               GET
 	 *************************************/
-	double getProteinConcentration(const string& name, const ProteinType t) const {
+	inline double getProteinConcentration(const string& name, const ProteinType t) const {
 		try {
-			return proteins.at(to_underlying(t)).at(name).c;
+			return actualProteins[proteinsRefs[to_underlying(t)].at(name)].c;
 		} catch (...) {
 			std::cerr << "Exception raised in getProteinConcentration for name = " << name
 			          << ", proteintype = " << to_underlying(t) << std::endl;
-			std::cerr << "proteins map = ";
-			for (auto& m : proteins) {
-				std::cerr << std::endl << "[ ";
-				for (auto& p : m) {
-					std::cerr << std::endl << "    " << p.first;
-				}
-				std::cerr << std::endl << "]";
-			}
 			exit(0);
 		}
 	}
 
+	size_t getFirstRegulIndex() { return getProteinSize(ProteinType::input); }
+	size_t getFirstOutputIndex() {
+		return getProteinSize(ProteinType::input) + getProteinSize(ProteinType::regul);
+	}
+
 	array<double, Implem::nbParams> getParams() const { return params; }
 
-	array<std::unordered_map<string, Protein>, 3> getProteins() const { return proteins; }
-
 	inline size_t getProteinSize(ProteinType t) const {
-		return proteins[to_underlying(t)].size();
+		return proteinsRefs[to_underlying(t)].size();
 	}
 
-	size_t getNbProteins() const {
-		size_t n = 0;
-		for (const auto& i : proteins) n += i.size();
-		return n;
-	}
+	size_t getNbProteins() const { return actualProteins.size(); }
 
 	int getCurrentStep() const { return currentStep; }
 
 	Protein& getProtein(ProteinType t, const string& name) {
-		assert(proteins[to_underlying(t)].count(name) > 0);
-		return proteins[to_underlying(t)][name];
+		return actualProteins[proteinsRefs[to_underlying(t)][name]];
+	}
+	Protein getProtein_const(ProteinType t, const string& name) const {
+		return actualProteins[proteinsRefs[to_underlying(t)].at(name)];
 	}
 
 	/**************************************
 	 *               SET
 	 *************************************/
-	void reset() {
-		for (size_t t0 = 0; t0 < proteins.size(); ++t0) {
-			for (auto p0 = proteins[t0].begin(); p0 != proteins[t0].end(); ++p0) {
-				p0->second.reset();
-			}
-		}
+	inline void reset() {
+		for (auto& p : actualProteins) p.reset();
 	}
 
 	void setParam(size_t i, double val) {
@@ -120,12 +128,12 @@ template <typename Implem> class GRN {
 	}
 
 	void setProteinConcentration(const string& name, ProteinType t, double c) {
-		proteins[(size_t)t][name].c = c;
+		getProtein(t, name).c = c;
 	}
 
 	vector<string> getProteinNames(ProteinType t) const {
 		vector<string> res;
-		for (auto& p : proteins[(size_t)t]) {
+		for (auto& p : proteinsRefs[(size_t)t]) {
 			res.push_back(p.first);
 		}
 		return res;
@@ -144,12 +152,13 @@ template <typename Implem> class GRN {
 	 *          ADDING PROTEINS
 	 *************************************/
 	void addProtein(const ProteinType t, const string& name, const Protein& p) {
-		proteins[to_underlying(t)].insert(make_pair(name, Protein(p)));
+		actualProteins.push_back(p);
+		proteinsRefs[to_underlying(t)].insert(make_pair(name, actualProteins.size() - 1));
 		updateSignatures();
 	}
 
 	void addRandomProtein(const ProteinType t, const string& name) {
-		proteins[to_underlying(t)].insert(make_pair(name, Protein()));
+		addProtein(t, name, Protein());
 	}
 
 	void addProteins(umap<string, Protein>& prots, const ProteinType t) {
@@ -158,9 +167,28 @@ template <typename Implem> class GRN {
 		}
 	}
 
+	void deleteProtein(size_t id) {
+		actualProteins.erase(actualProteins.begin() + id);
+		// we need to decrement every protein ref after it
+		for (auto& t : proteinsRefs) {
+			for (auto it = t.begin(); it != t.end();) {
+				if ((*it).second == id) {
+					it = t.erase(it);
+				} else {
+					if ((*it).second > id) {
+						(*it).second--;
+					}
+					++it;
+				}
+			}
+		}
+	}
+
 	void randomReguls(size_t n) {
+		while (proteinsRefs[to_underlying(ProteinType::regul)].size() > 0)
+			deleteProtein((proteinsRefs[to_underlying(ProteinType::regul)].begin())->second);
+
 		ostringstream name;
-		proteins[to_underlying(ProteinType::regul)].clear();
 		for (size_t i = 0; i < n; ++i) {
 			name.str("");
 			name.clear();
@@ -172,13 +200,13 @@ template <typename Implem> class GRN {
 
 	void updateRegulNames() {
 		int id = 0;
-		umap<string, Protein> newReguls;
-		for (auto& i : proteins[to_underlying(ProteinType::regul)]) {
+		umap<string, size_t> newReguls;
+		for (auto& i : proteinsRefs[to_underlying(ProteinType::regul)]) {
 			ostringstream name;
 			name << "r" << id++;
 			newReguls[name.str()] = i.second;
 		}
-		proteins[to_underlying(ProteinType::regul)] = newReguls;
+		proteinsRefs[to_underlying(ProteinType::regul)] = newReguls;
 	};
 
 	/**************************************
@@ -207,9 +235,9 @@ template <typename Implem> class GRN {
 					// std::uniform_int_distribution<int> dInt(0, reguls.size() - 1);
 					// int v = dInt(grnRand);
 					// proteins[to_underlying(ProteinType::regul)][reguls[v]].mutate();
-					for (auto& r : proteins[to_underlying(ProteinType::regul)]) {
+					for (auto& r : proteinsRefs[to_underlying(ProteinType::regul)]) {
 						if (dReal(grnRand) <= 1.0 / static_cast<double>(reguls.size())) {
-							r.second.mutate();
+							actualProteins[r.second].mutate();
 						}
 					}
 				}
@@ -225,9 +253,7 @@ template <typename Implem> class GRN {
 			else {
 				if (reguls.size() > 0) {
 					std::uniform_int_distribution<int> dInt(0, reguls.size() - 1);
-					auto it = proteins[to_underlying(ProteinType::regul)].begin();
-					advance(it, dInt(grnRand));
-					proteins[to_underlying(ProteinType::regul)].erase(it);
+					deleteProtein(dInt(grnRand));
 					updateRegulNames();
 				}
 			}
@@ -237,101 +263,101 @@ template <typename Implem> class GRN {
 
 	GRN crossover(const GRN& other) { return GRN::crossover(*this, other); }
 
-	static double computeDistance(const GRN& g0, const GRN& g1) {
-		// a rough measure of the distance between 2 grn
-		int pclones = 0;
-		for (auto t = 0u; t < 3; ++t) {
-			for (const auto& pr0 : g0.proteins[t]) {
-				for (const auto& pr1 : g1.proteins[t]) {
-					if (Protein::areSame(pr0.second, pr1.second)) {
-						++pclones;
-						break;
-					}
-				}
-			}
-		}
-		return 1.0 - (static_cast<double>(pclones) * 2.0 /
-		              (g0.getNbProteins() + g1.getNbProteins()));
-	}
-
 	static GRN crossover(const GRN& g0, const GRN& g1) {
-		assert(g0.proteins.size() == g1.proteins.size());
+		assert(g0.proteinsRefs.size() == g1.proteinsRefs.size());
 		assert(g0.params.size() == g1.params.size());
-		assert(g0.proteins[to_underlying(ProteinType::input)].size() ==
-		       g1.proteins[to_underlying(ProteinType::input)].size());
-		assert(g0.proteins[to_underlying(ProteinType::output)].size() ==
-		       g1.proteins[to_underlying(ProteinType::output)].size());
+		assert(g0.proteinsRefs[to_underlying(ProteinType::input)].size() ==
+		       g1.proteinsRefs[to_underlying(ProteinType::input)].size());
+		assert(g0.proteinsRefs[to_underlying(ProteinType::output)].size() ==
+		       g1.proteinsRefs[to_underlying(ProteinType::output)].size());
 		GRN offspring;
 		assert(offspring.params.size() == g0.params.size());
 		std::uniform_int_distribution<int> d5050(0, 1);
 		std::uniform_real_distribution<double> dReal(0.0, 1.0);
-		// 50/50 for params, inputs and outputs
+		// 50/50 for params, inputs and outputs:
+
+		// params:
 		for (size_t i = 0; i < g0.params.size(); ++i) {
 			offspring.params[i] = d5050(grnRand) ? g0.params[i] : g1.params[i];
 		}
-		offspring.proteins[to_underlying(ProteinType::input)] =
-		    g0.proteins[to_underlying(ProteinType::input)];
-		offspring.proteins[to_underlying(ProteinType::output)] =
-		    g0.proteins[to_underlying(ProteinType::output)];
-		for (auto& i : g1.proteins[to_underlying(ProteinType::input)])
-			if (d5050(grnRand))
-				offspring.proteins[to_underlying(ProteinType::input)][i.first] = i.second;
-		for (auto& i : g1.proteins[to_underlying(ProteinType::output)])
-			if (d5050(grnRand))
-				offspring.proteins[to_underlying(ProteinType::output)][i.first] = i.second;
+
+		// inputs
+		for (auto& i : g0.proteinsRefs[to_underlying(ProteinType::input)]) {
+			if (d5050(grnRand) == 1) {
+				offspring.addProtein(ProteinType::input, i.first,
+				                     g0.getProtein_const(ProteinType::input, i.first));
+			} else {
+				offspring.addProtein(ProteinType::input, i.first,
+				                     g1.getProtein_const(ProteinType::input, i.first));
+			}
+		}
+
+		// outputs
+		for (auto& i : g0.proteinsRefs[to_underlying(ProteinType::output)]) {
+			if (d5050(grnRand) == 1) {
+				offspring.addProtein(ProteinType::output, i.first,
+				                     g0.getProtein_const(ProteinType::output, i.first));
+			} else {
+				offspring.addProtein(ProteinType::output, i.first,
+				                     g1.getProtein_const(ProteinType::output, i.first));
+			}
+		}
+
 		// find closest pairs
-		umap<string, Protein> r0 = g0.proteins[to_underlying(ProteinType::regul)];
-		umap<string, Protein> r1 = g1.proteins[to_underlying(ProteinType::regul)];
+		auto r0 = g0.getProteinNames(ProteinType::regul);
+		auto r1 = g1.getProteinNames(ProteinType::regul);
 		vector<pair<Protein, Protein>> aligned;  // first = g0's proteins, second = g1's
 		double minDist = 0;
 		while (minDist < GAConfiguration::ALIGN_TRESHOLD && r0.size() > 0 && r1.size() > 0 &&
 		       aligned.size() < GAConfiguration::MAX_REGULS) {
 			pair<string, string> closest;
 			minDist = std::numeric_limits<double>::infinity();
-			for (auto i = r0.begin(); i != r0.end(); ++i) {
-				for (auto j = r1.begin(); j != r1.end(); ++j) {
-					double dist = i->second.getDistanceWith(j->second);
+			for (const auto& i : r0) {
+				for (const auto& j : r1) {
+					double dist = g0.getProtein_const(ProteinType::regul, i)
+					                  .getDistanceWith(g1.getProtein_const(ProteinType::regul, j));
 					if (dist < minDist) {
-						closest = make_pair(i->first, j->first);
+						closest = {i, j};
 						minDist = dist;
 					}
 				}
 			}
 			if (minDist < GAConfiguration::ALIGN_TRESHOLD) {
-				aligned.push_back(
-				    pair<Protein, Protein>(r0.at(closest.first), r1.at(closest.second)));
-				r0.erase(closest.first);
-				r1.erase(closest.second);
+				aligned.push_back({g0.getProtein_const(ProteinType::regul, closest.first),
+				                   g1.getProtein_const(ProteinType::regul, closest.second)});
+				r0.erase(std::remove(r0.begin(), r0.end(), closest.first), r0.end());
+				r1.erase(std::remove(r1.begin(), r1.end(), closest.second), r1.end());
 			}
 		}
 		// ProteinType::regul : 50/50 with aligned
-		int id = offspring.proteins[to_underlying(ProteinType::regul)].size();
+		int id = offspring.getProteinSize(ProteinType::regul);
+		assert(id == 0);
 		for (auto& i : aligned) {
 			ostringstream name;
 			name << "r" << id++;
 			if (d5050(grnRand))
-				offspring.proteins[to_underlying(ProteinType::regul)][name.str()] = i.first;
+				offspring.addProtein(ProteinType::regul, name.str(), i.first);
 			else
-				offspring.proteins[to_underlying(ProteinType::regul)][name.str()] = i.second;
+				offspring.addProtein(ProteinType::regul, name.str(), i.second);
 		}
-		// append the rest (about 1/2 chance)
+		// append the rest (with a certain probability)
 		for (auto& i : r0) {
-			if (offspring.proteins[to_underlying(ProteinType::regul)].size() <
-			    GAConfiguration::MAX_REGULS) {
+			if (offspring.getProteinSize(ProteinType::regul) < GAConfiguration::MAX_REGULS) {
 				if (dReal(grnRand) < GAConfiguration::APPEND_NON_ALIGNED) {
 					ostringstream name;
 					name << "r" << id++;
-					offspring.proteins[to_underlying(ProteinType::regul)][name.str()] = i.second;
+					offspring.addProtein(ProteinType::regul, name.str(),
+					                     g0.getProtein_const(ProteinType::regul, i));
 				}
 			}
 		}
 		for (auto& i : r1) {
-			if (offspring.proteins[to_underlying(ProteinType::regul)].size() <
-			    GAConfiguration::MAX_REGULS) {
+			if (offspring.getProteinSize(ProteinType::regul) < GAConfiguration::MAX_REGULS) {
 				if (dReal(grnRand) < GAConfiguration::APPEND_NON_ALIGNED) {
 					ostringstream name;
 					name << "r" << id++;
-					offspring.proteins[to_underlying(ProteinType::regul)][name.str()] = i.second;
+					offspring.addProtein(ProteinType::regul, name.str(),
+					                     g1.getProtein_const(ProteinType::regul, i));
 				}
 			}
 		}
@@ -348,40 +374,31 @@ template <typename Implem> class GRN {
 		json par = o.at("params");
 		assert(par.size() == Implem::nbParams);
 		size_t i = 0;
-		for (auto& p : par) {
-			double v;
-			sscanf(p.get<string>().c_str(), "%la", &v);
-			params[i++] = v;
-		}
+		for (auto& p : par) 
+			params[i++] = p.get<double>();
 		assert(o.count("proteins"));
 		for (size_t t = to_underlying(ProteinType::input);
 		     t <= to_underlying(ProteinType::output); ++t) {
 			json prots = o.at("proteins").at(typeToString((ProteinType)t));
 			for (json::iterator it = prots.begin(); it != prots.end(); ++it) {
-				proteins[t][it.key()] = Protein(it.value());
+				addProtein((ProteinType)t, it.key(), Protein(it.value()));
 			}
 		}
 		updateSignatures();
 	}
 
 	string toJSON() const {
-		json parArray;
-		for (auto& p : params) {
-			char buf[50];
-			snprintf(buf, sizeof(buf), "%a", p);
-			parArray.push_back(buf);
-		}
 		json protObj;
-		for (size_t t = 0; t < proteins.size(); ++t) {
+		for (size_t t = 0; t < proteinsRefs.size(); ++t) {
 			json pr;
-			for (auto p = proteins[t].begin(); p != proteins[t].end(); ++p) {
-				pr[p->first] = p->second.toJSON();
+			for (auto p = proteinsRefs[t].begin(); p != proteinsRefs[t].end(); ++p) {
+				pr[p->first] = actualProteins[p->second].toJSON();
 			}
 			protObj[typeToString((ProteinType)t)] = pr;
 		}
 		json o;
 		o["proteins"] = protObj;
-		o["params"] = parArray;
+		o["params"] = params;
 		return o.dump(2);
 	}
 
