@@ -216,48 +216,36 @@ template <typename Implem> class GRN {
 	 *************************************/
 	void mutate() {
 		std::uniform_real_distribution<double> dReal(0.0, 1.0);
-		// mutate params
-		if (dReal(grnRand) < config.MODIF_RATE / static_cast<double>(getNbProteins())) {
-			// if (dReal(grnRand) < config.PARAMS_MUT_RATE) {
-			auto limits = Implem::paramsLimits();
-			std::uniform_int_distribution<int> dInt(0, Implem::nbParams - 1);
-			int mutParam = dInt(grnRand);
-			std::uniform_real_distribution<double> distrib(limits[mutParam].first,
-			                                               limits[mutParam].second);
-			params[mutParam] = distrib(grnRand);
-		}
-		// mutate proteins
-		else {
-			vector<string> reguls = getProteinNames(ProteinType::regul);
-			// mutate 1 protein
-			double dval = dReal(grnRand);
-			if (dval <=
-			    config.MODIF_RATE / (config.MODIF_RATE + config.ADD_RATE + config.DEL_RATE)) {
-				if (reguls.size() > 0) {
-					// std::uniform_int_distribution<int> dInt(0, reguls.size() - 1);
-					// int v = dInt(grnRand);
-					// proteins[to_underlying(ProteinType::regul)][reguls[v]].mutate();
-					for (auto& r : proteinsRefs[to_underlying(ProteinType::regul)]) {
-						if (dReal(grnRand) <= 1.0 / static_cast<double>(reguls.size())) {
-							actualProteins[r.second].mutate();
-						}
-					}
-				}
+		double dTot = config.MODIF_RATE + config.ADD_RATE + config.DEL_RATE;
+		double diceRoll = dReal(grnRand);
+		if (diceRoll < config.MODIF_RATE / dTot) {
+			// modification (of either a param or a protein)
+			std::uniform_int_distribution<size_t> dIndex(0,
+			                                             getNbProteins() + params.size() - 1);
+			size_t id = dIndex(grnRand);
+			if (id < getNbProteins()) {
+				// we mutate a protein
+				actualProteins[id].mutate();
+			} else {
+				// we mutate a param
+				auto limits = Implem::paramsLimits();
+				size_t paramId = id - getNbProteins();
+				std::uniform_real_distribution<double> distrib(limits[paramId].first,
+				                                               limits[paramId].second);
+				params[paramId] = distrib(grnRand);
 			}
-			// ajout
-			else if (dval <= (config.MODIF_RATE + config.ADD_RATE) /
-			                     (config.MODIF_RATE + config.ADD_RATE + config.DEL_RATE)) {
-				ostringstream name;
-				name << "r" << reguls.size();
-				addProtein(ProteinType::regul, name.str(), Protein());
-			}
-			// suppression
-			else {
-				if (reguls.size() > 0) {
-					std::uniform_int_distribution<int> dInt(0, reguls.size() - 1);
-					deleteProtein(dInt(grnRand));
-					updateRegulNames();
-				}
+		} else if (diceRoll < (config.MODIF_RATE + config.ADD_RATE) / dTot) {
+			// we add a new regulatory protein
+			ostringstream name;
+			name << "r" << reguls.size();
+			addProtein(ProteinType::regul, name.str(), Protein());
+		} else {
+			// we delete one regulatory protein
+			if (getProteinSize(ProteinType::regul) > 0) {
+				std::uniform_int_distribution<int> dRegul(getFirstRegulIndex(),
+				                                          getFirstOutputIndex() - 1);
+				deleteProtein(dRegul(grnRand));
+				updateRegulNames();
 			}
 		}
 		updateSignatures();
