@@ -1,0 +1,1 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -O3 -g -std=c++11 -Wall -Wextra -Wundef -Wshadow -Winit-self -Wconversion -Wformat=2 -pedantic  -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/unit_test.dir/unit.cpp.o  -o unit_test  
