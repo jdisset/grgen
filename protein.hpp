@@ -76,7 +76,7 @@ struct Protein {
 		coords[mutated] = getRandomCoord();
 		// we want to mutate at least 1 coord, maybe more.
 		for (size_t i = 0; i < nbCoords; ++i) {
-			if (i != mutated && dReal(grnRand) < MULTIPLE_MUTATION_PROBA)
+			if (static_cast<int>(i) != mutated && dReal(grnRand) < MULTIPLE_MUTATION_PROBA)
 				coords[i] = getRandomCoord();
 		}
 	}

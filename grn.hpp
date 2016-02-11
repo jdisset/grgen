@@ -215,6 +215,8 @@ template <typename Implem> class GRN {
 	 *       MUTATION & CROSSOVER
 	 *************************************/
 	void mutate() {
+		size_t nInputs = getProteinSize(ProteinType::input);
+		size_t nOutputs = getProteinSize(ProteinType::output);
 		std::uniform_real_distribution<double> dReal(0.0, 1.0);
 		// mutate params
 		if (dReal(grnRand) < config.MODIF_RATE / static_cast<double>(getNbProteins())) {
@@ -255,12 +257,14 @@ template <typename Implem> class GRN {
 			else {
 				if (reguls.size() > 0) {
 					std::uniform_int_distribution<int> dInt(0, reguls.size() - 1);
-					deleteProtein(dInt(grnRand));
+					deleteProtein(getFirstRegulIndex() + dInt(grnRand));
 					updateRegulNames();
 				}
 			}
 		}
 		updateSignatures();
+		assert(nInputs == getProteinSize(ProteinType::input));
+		assert(nOutputs == getProteinSize(ProteinType::output));
 	}
 
 	GRN crossover(const GRN& other) { return GRN::crossover(*this, other); }
@@ -373,7 +377,10 @@ template <typename Implem> class GRN {
 	GRN(const string& js) {
 		auto o = json::parse(js);
 		assert(o.count("params"));
-		params = o.at("params").get<std::array<double, Implem::nbParams>>();
+		auto paramsvec = o.at("params").get<std::vector<double>>();
+		assert(paramsvec.size() == Implem::nbParams);
+		size_t i = 0;
+		for (auto& p : paramsvec) params[i++] = p;
 		assert(o.count("proteins"));
 		for (size_t t = to_underlying(ProteinType::input);
 		     t <= to_underlying(ProteinType::output); ++t) {
