@@ -8,16 +8,17 @@
 #define INIT_CONCENTRATION 0.5
 
 static std::default_random_engine grnRand = std::default_random_engine(
-    std::chrono::system_clock::now().time_since_epoch().count());
-enum class ProteinType { input = 0, regul = 1, output = 2 };
+    static_cast<unsigned int>(
+        std::chrono::system_clock::now().time_since_epoch().count()) +
+    std::random_device()());
+enum class ProteinType { input = 0u, regul = 1u, output = 2u };
 template <typename T> T mix(const T& a, const T& b, const double v) {
 	double r = v > 1.0 ? 1.0 : (v < 0.0 ? 0.0 : v);
 	return (a * (1.0 - r)) + (r * b);
 }
 
-template <typename E>
-inline static constexpr typename std::underlying_type<E>::type to_underlying(E e) {
-	return static_cast<typename std::underlying_type<E>::type>(e);
+template <typename E> inline static constexpr unsigned int to_underlying(E e) {
+	return static_cast<unsigned int>(e);
 }
 
 template <typename P, typename C>

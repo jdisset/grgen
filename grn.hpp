@@ -39,7 +39,7 @@ template <typename Implem> class GRN {
 	GAConfiguration config;
 
  protected:
-	array<double, Implem::nbParams> params;  // alpha, beta, ...
+	array<double, Implem::nbParams> params{};  // alpha, beta, ...
 	array<umap<string, size_t>, 3> proteinsRefs;
 	vector<Protein> actualProteins;
 	vector<vector<InfluenceVec>>
@@ -78,6 +78,8 @@ template <typename Implem> class GRN {
 		}
 		implem.updateSignatures(*this);
 	}
+
+	vector<vector<InfluenceVec>> getSignatures() { return signatures; }
 
 	void step(unsigned int nbSteps = 1) { implem.step(*this, nbSteps); }
 
@@ -153,7 +155,7 @@ template <typename Implem> class GRN {
 	 *************************************/
 	void addProtein(const ProteinType t, const string& name, const Protein& p) {
 		actualProteins.push_back(p);
-		proteinsRefs[to_underlying(t)].insert(make_pair(name, actualProteins.size() - 1));
+		proteinsRefs[to_underlying(t)].insert(make_pair(name, actualProteins.size() - 1u));
 		updateSignatures();
 	}
 
@@ -219,7 +221,7 @@ template <typename Implem> class GRN {
 			// if (dReal(grnRand) < config.PARAMS_MUT_RATE) {
 			auto limits = Implem::paramsLimits();
 			std::uniform_int_distribution<int> dInt(0, Implem::nbParams - 1);
-			size_t mutParam = dInt(grnRand);
+			int mutParam = dInt(grnRand);
 			std::uniform_real_distribution<double> distrib(limits[mutParam].first,
 			                                               limits[mutParam].second);
 			params[mutParam] = distrib(grnRand);
@@ -371,11 +373,7 @@ template <typename Implem> class GRN {
 	GRN(const string& js) {
 		auto o = json::parse(js);
 		assert(o.count("params"));
-		json par = o.at("params");
-		assert(par.size() == Implem::nbParams);
-		size_t i = 0;
-		for (auto& p : par) 
-			params[i++] = p.get<double>();
+		params = o.at("params").get<std::array<double, Implem::nbParams>>();
 		assert(o.count("proteins"));
 		for (size_t t = to_underlying(ProteinType::input);
 		     t <= to_underlying(ProteinType::output); ++t) {

@@ -34,7 +34,7 @@ struct Classic {
 	static constexpr ProteinType pregul = ProteinType::regul;
 	static constexpr ProteinType poutput = ProteinType::output;
 
-	int maxEnhance = 0, maxInhibit = 0;
+	double maxEnhance = 0.0, maxInhibit = 0.0;
 
 	Classic() {}
 
@@ -63,14 +63,6 @@ struct Classic {
 	}
 
 	template <typename GRN> void step(GRN& grn, unsigned int nbSteps) {
-		// std::cerr << " grn.signatures" << std::endl;
-		// for (size_t i = 0; i < grn.actualProteins.size(); ++i) {
-		// for (size_t j = 0; j < grn.actualProteins.size(); ++j) {
-		// std::cerr << "[" << i << "][" << j << "] = {" << grn.signatures[i][j][0] << ", "
-		//<< grn.signatures[i][j][1] << "} ";
-		//}
-		// std::cerr << std::endl;
-		//}
 		for (auto s = 0u; s < nbSteps; ++s) {
 			std::vector<double> nextProteins;  // only reguls & outputs concentrations
 			nextProteins.reserve(grn.getNbProteins() - grn.getProteinSize(ProteinType::input));
@@ -81,36 +73,26 @@ struct Classic {
 						influence[i] += grn.actualProteins[k].c * grn.signatures[k][j][i];
 					}
 				}
-				
-				nextProteins.push_back(max(0.0, grn.actualProteins[j].c +
-				                                    (grn.params[1] / grn.getNbProteins()) *
-				                                        (influence[0] - influence[1])));
-				std::cerr << "Influence = " << influence[0] << ", " << influence[1]
-				          << ", pushed back " << nextProteins[nextProteins.size() - 1]
-				          << std::endl;
+
+				double newValue = grn.actualProteins[j].c +
+				                  (grn.params[1] / static_cast<double>(grn.getNbProteins())) *
+				                      (influence[0] - influence[1]);
+
+				nextProteins.push_back(max(0.0, newValue));
 			}
 			// Normalizing regul & output proteins concentrations
 			double sumConcentration = 0.0;
 			for (auto i : nextProteins) {
 				sumConcentration += i;
 			}
-			std::cerr << "sumc = " << sumConcentration << std::endl;
 			if (sumConcentration > 0) {
 				for (auto& i : nextProteins) {
 					i /= sumConcentration;
 				}
 			}
-			for (size_t i = grn.getFirstRegulIndex(); i < grn.getNbProteins(); ++i) {
-				grn.actualProteins[i].c = nextProteins[i];
-			}
-			for (auto& i : nextProteins) {
-				std::cerr << "np =" << i << std::endl;
-			}
-		}
-		for (auto& t : grn.proteinsRefs) {
-			for (auto& p : t) {
-				std::cerr << " p " << p.first << " [" << p.second
-				          << "] = " << grn.actualProteins[p.second].c << std::endl;
+			auto firstRegulIndex = grn.getFirstRegulIndex();
+			for (size_t i = firstRegulIndex; i < grn.getNbProteins(); ++i) {
+				grn.actualProteins[i].c = nextProteins[i - firstRegulIndex];
 			}
 		}
 	}

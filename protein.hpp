@@ -8,6 +8,7 @@
 #include <string>
 #include <random>
 #include <type_traits>
+#include <utility>
 #include "common.h"
 
 #define MULTIPLE_MUTATION_PROBA 0.1
@@ -40,6 +41,12 @@ struct Protein {
 		return static_cast<CoordsType>(distribution(grnRand));
 	}
 
+	Protein(const decltype(coords) &co, double conc) : coords(co), c(conc), prevc(conc) {
+		for (auto &coo : coords) {
+			coo = std::max(static_cast<CoordsType>(minCoord),
+			               std::min(static_cast<CoordsType>(maxCoord), coo));
+		}
+	}
 	Protein(const Protein &p) : coords(p.coords), c(p.c), prevc(p.prevc){};
 	Protein() {
 		// Constructs a protein with random coords
@@ -49,6 +56,8 @@ struct Protein {
 	explicit Protein(const json &o) {
 		// constructs a protein from a json object
 		assert(o.count("coords"));
+		assert(o.count("c"));
+		c = o.at("c");
 		json coordsArray = o.at("coords");
 		assert(coordsArray.size() == nbCoords);
 		size_t i = 0;
@@ -63,7 +72,7 @@ struct Protein {
 	void mutate() {
 		std::uniform_real_distribution<double> dReal(0.0, 1.0);  // just a dice roll
 		std::uniform_int_distribution<int> dInt(0, nbCoords);
-		size_t mutated = dInt(grnRand);
+		int mutated = dInt(grnRand);
 		coords[mutated] = getRandomCoord();
 		// we want to mutate at least 1 coord, maybe more.
 		for (size_t i = 0; i < nbCoords; ++i) {
@@ -75,6 +84,7 @@ struct Protein {
 	json toJSON() const {
 		json o;
 		o["coords"] = coords;
+		o["c"] = c;
 		return o;
 	}
 
