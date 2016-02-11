@@ -18,15 +18,14 @@ using std::ostringstream;
 template <typename Implem> class GRN {
 	struct GAConfiguration {
 		// crossover
-		static constexpr double ALIGN_TRESHOLD = 0.4;
-		static constexpr double APPEND_NON_ALIGNED = 0.4;
-		static constexpr unsigned int MAX_REGULS = 40;
+		static constexpr double ALIGN_TRESHOLD = 0.6;
+		static constexpr double APPEND_NON_ALIGNED = 0.3;
+		static constexpr unsigned int MAX_REGULS = 50;
 
 		// mutation
-		double PARAMS_MUT_RATE = 0.1;
-		double MODIF_RATE = 0.6;
-		double ADD_RATE = 0.2;
-		double DEL_RATE = 0.2;
+		double MODIF_RATE = 0.8;
+		double ADD_RATE = 0.1;
+		double DEL_RATE = 0.1;
 	};
 
 	friend Implem;
@@ -237,7 +236,7 @@ template <typename Implem> class GRN {
 		} else if (diceRoll < (config.MODIF_RATE + config.ADD_RATE) / dTot) {
 			// we add a new regulatory protein
 			ostringstream name;
-			name << "r" << reguls.size();
+			name << "r" << getProteinSize(ProteinType::regul);
 			addProtein(ProteinType::regul, name.str(), Protein());
 		} else {
 			// we delete one regulatory protein
@@ -361,7 +360,10 @@ template <typename Implem> class GRN {
 	GRN(const string& js) {
 		auto o = json::parse(js);
 		assert(o.count("params"));
-		params = o.at("params").get<std::array<double, Implem::nbParams>>();
+		json par = o.at("params");
+		assert(par.size() == Implem::nbParams);
+		size_t i = 0;
+		for (auto& p : par) params[i++] = p.get<double>();
 		assert(o.count("proteins"));
 		for (size_t t = to_underlying(ProteinType::input);
 		     t <= to_underlying(ProteinType::output); ++t) {

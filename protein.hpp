@@ -70,15 +70,9 @@ struct Protein {
 	}
 
 	void mutate() {
-		std::uniform_real_distribution<double> dReal(0.0, 1.0);  // just a dice roll
 		std::uniform_int_distribution<int> dInt(0, nbCoords);
 		int mutated = dInt(grnRand);
 		coords[mutated] = getRandomCoord();
-		// we want to mutate at least 1 coord, maybe more.
-		for (size_t i = 0; i < nbCoords; ++i) {
-			if (i != mutated && dReal(grnRand) < MULTIPLE_MUTATION_PROBA)
-				coords[i] = getRandomCoord();
-		}
 	}
 
 	json toJSON() const {
