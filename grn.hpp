@@ -23,9 +23,9 @@ template <typename Implem> class GRN {
 		static constexpr unsigned int MAX_REGULS = 50;
 
 		// mutation
-		double MODIF_RATE = 0.8;
+		double MODIF_RATE = 0.78;
 		double ADD_RATE = 0.1;
-		double DEL_RATE = 0.1;
+		double DEL_RATE = 0.12;
 	};
 
 	friend Implem;
@@ -219,19 +219,15 @@ template <typename Implem> class GRN {
 		double diceRoll = dReal(grnRand);
 		if (diceRoll < config.MODIF_RATE / dTot) {
 			// modification (of either a param or a protein)
-			std::uniform_int_distribution<size_t> dIndex(0,
-			                                             getNbProteins() + params.size() - 1);
-			size_t id = dIndex(grnRand);
-			if (id < getNbProteins()) {
-				// we mutate a protein
-				actualProteins[id].mutate();
-			} else {
-				// we mutate a param
+			double v = 3.0 / static_cast<double>(actualProteins.size() + params.size());
+			for (auto& p : actualProteins) {
+				if (dReal(grnRand) < v) p.mutate();
+			}
+			for (size_t paramId = 0; paramId < params.size(); ++paramId) {
 				auto limits = Implem::paramsLimits();
-				size_t paramId = id - getNbProteins();
 				std::uniform_real_distribution<double> distrib(limits[paramId].first,
 				                                               limits[paramId].second);
-				params[paramId] = distrib(grnRand);
+				if (dReal(grnRand) < v) params[paramId] = distrib(grnRand);
 			}
 		} else if (diceRoll < (config.MODIF_RATE + config.ADD_RATE) / dTot) {
 			// we add a new regulatory protein

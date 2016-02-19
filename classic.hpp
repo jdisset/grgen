@@ -66,19 +66,17 @@ struct Classic {
 		for (auto s = 0u; s < nbSteps; ++s) {
 			std::vector<double> nextProteins;  // only reguls & outputs concentrations
 			nextProteins.reserve(grn.getNbProteins() - grn.getProteinSize(ProteinType::input));
+			const auto firstOutputId = grn.getFirstOutputIndex();
 			for (size_t j = grn.getFirstRegulIndex(); j < grn.getNbProteins(); ++j) {
-				array<double, nbSignatureParams> influence{};
-				for (size_t k = 0; k < grn.getFirstOutputIndex(); ++k) {
-					for (size_t i = 0; i < influence.size(); ++i) {
-						influence[i] += grn.actualProteins[k].c * grn.signatures[k][j][i];
-					}
+				double enh = 0.0, inh = 0.0;
+				for (size_t k = 0; k < firstOutputId; ++k) {
+					enh += grn.actualProteins[k].c * grn.signatures[k][j][0];
+					inh += grn.actualProteins[k].c * grn.signatures[k][j][1];
 				}
-
-				double newValue = grn.actualProteins[j].c +
-				                  (grn.params[1] / static_cast<double>(grn.getNbProteins())) *
-				                      (influence[0] - influence[1]);
-
-				nextProteins.push_back(max(0.0, newValue));
+				nextProteins.push_back(
+				    max(0.0, grn.actualProteins[j].c +
+				                 (grn.params[1] / static_cast<double>(grn.getNbProteins())) *
+				                     (enh - inh)));
 			}
 			// Normalizing regul & output proteins concentrations
 			double sumConcentration = 0.0;
