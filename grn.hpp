@@ -23,9 +23,9 @@ template <typename Implem> class GRN {
 		static constexpr unsigned int MAX_REGULS = 50;
 
 		// mutation
-		double MODIF_RATE = 0.78;
-		double ADD_RATE = 0.1;
-		double DEL_RATE = 0.12;
+		double MODIF_RATE = 0.7;
+		double ADD_RATE = 0.15;
+		double DEL_RATE = 0.15;
 	};
 
 	friend Implem;
