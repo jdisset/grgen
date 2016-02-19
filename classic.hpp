@@ -50,14 +50,15 @@ struct Classic {
 				    {static_cast<double>(IDSIZE - abs(getEnh(p0) - getId(p1))),
 				     static_cast<double>(IDSIZE - abs(getInh(p0) - getId(p1)))}};
 				if (grn.signatures[i][j][0] > maxEnhance) maxEnhance = grn.signatures[i][j][0];
-				if (grn.signatures[i][j][1] > maxEnhance) maxEnhance = grn.signatures[i][j][1];
+				if (grn.signatures[i][j][1] > maxInhibit) maxInhibit = grn.signatures[i][j][1];
 			}
 		}
+		// std::cerr << "maxEnh = " << maxEnhance << ", maxInh = " << maxInhibit << std::endl;
 		for (size_t i = 0; i < grn.actualProteins.size(); ++i) {
 			for (size_t j = 0; j < grn.actualProteins.size(); ++j) {
 				grn.signatures[i][j] = {
 				    {exp(grn.params[0] * grn.signatures[i][j][0] - maxEnhance),
-				     exp(grn.params[1] * grn.signatures[i][j][1] - maxInhibit)}};
+				     exp(grn.params[0] * grn.signatures[i][j][1] - maxInhibit)}};
 			}
 		}
 	}
@@ -79,6 +80,11 @@ struct Classic {
 				                      (influence[0] - influence[1]);
 
 				nextProteins.push_back(max(0.0, newValue));
+				// std::cerr << "Protein " << j << " : oldval = " << grn.actualProteins[j].c
+				//<< ", newVal = " << newValue << std::endl;
+				// std::cerr << "grn.params[1] = " << grn.params[1]
+				//<< ", influence[0] = " << influence[0]
+				//<< ", influence[1] = " << influence[1] << std::endl;
 			}
 			// Normalizing regul & output proteins concentrations
 			double sumConcentration = 0.0;
