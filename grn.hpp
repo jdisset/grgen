@@ -92,6 +92,7 @@ template <typename Implem> class GRN {
 		} catch (...) {
 			std::cerr << "Exception raised in getProteinConcentration for name = " << name
 			          << ", proteintype = " << to_underlying(t) << std::endl;
+			return 0.0;
 			// exit(0);
 		}
 	}
