@@ -30,4 +30,4 @@
 .DS_Store
 
 build
-
+tests/build

@@ -22,11 +22,12 @@ struct Protein {
 	double c = INIT_CONCENTRATION;      // current concentration
 	double prevc = INIT_CONCENTRATION;  // previous concentration
 
-	static bool areSame(const Protein &p0, const Protein &p1) {
+	bool operator==(const Protein &b) const {
 		for (size_t i = 0; i < nbCoords; ++i)
-			if (p0.coords[i] != p1.coords[i]) return false;
-		return true;
+			if (coords[i] != b.coords[i]) return false;
+		return c == b.c;
 	}
+	bool operator!=(const Protein &b) const { return !(*this == b); }
 
 	// switching between integral or real random distribution
 	template <typename T = CoordsType>
@@ -58,10 +59,10 @@ struct Protein {
 		assert(o.count("coords"));
 		assert(o.count("c"));
 		c = o.at("c");
-		json coordsArray = o.at("coords");
-		assert(coordsArray.size() == nbCoords);
-		size_t i = 0;
-		for (auto &co : coordsArray) coords[i++] = co.get<CoordsType>();
+		if (o.count("pc")) prevc = o.at("pc");
+		auto vcoords = o.at("coords").get<std::vector<CoordsType>>();
+		assert(vcoords.size() == coords.size());
+		for (size_t i = 0; i < vcoords.size(); ++i) coords[i] = vcoords[i];
 	}
 
 	void reset() {
@@ -79,6 +80,7 @@ struct Protein {
 		json o;
 		o["coords"] = coords;
 		o["c"] = c;
+		o["pc"] = prevc;
 		return o;
 	}
 

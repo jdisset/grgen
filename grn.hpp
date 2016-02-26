@@ -39,7 +39,7 @@ template <typename Implem> class GRN {
 
  protected:
 	array<double, Implem::nbParams> params{};  // alpha, beta, ...
-	array<umap<string, size_t>, 3> proteinsRefs;
+	array<map<string, size_t>, 3> proteinsRefs;
 	vector<Protein> actualProteins;
 	vector<vector<InfluenceVec>>
 	    signatures;  // stores the influence of one protein onto the others (p0
@@ -91,8 +91,8 @@ template <typename Implem> class GRN {
 		} catch (...) {
 			std::cerr << "Exception raised in getProteinConcentration for name = " << name
 			          << ", proteintype = " << to_underlying(t) << std::endl;
-			return 0.0;
-			// exit(0);
+			std::cerr << "size = " << actualProteins.size() << std::endl;
+			exit(0);
 		}
 	}
 
@@ -117,6 +117,8 @@ template <typename Implem> class GRN {
 	Protein getProtein_const(ProteinType t, const string& name) const {
 		return actualProteins[proteinsRefs[to_underlying(t)].at(name)];
 	}
+	vector<Protein> getActualProteinsCopy() const { return actualProteins; }
+	vector<Protein>& getActualProteins() { return actualProteins; }
 
 	/**************************************
 	 *               SET
@@ -163,14 +165,14 @@ template <typename Implem> class GRN {
 		addProtein(t, name, Protein());
 	}
 
-	void addProteins(umap<string, Protein>& prots, const ProteinType t) {
+	void addProteins(map<string, Protein>& prots, const ProteinType t) {
 		for (auto& p : prots) {
 			addProtein(t, p.first, p.second);
 		}
 	}
 
 	void deleteProtein(size_t id) {
-		actualProteins.erase(actualProteins.begin() + id);
+		actualProteins.erase(actualProteins.begin() + static_cast<long>(id));
 		// we need to decrement every protein ref after it
 		for (auto& t : proteinsRefs) {
 			for (auto it = t.begin(); it != t.end();) {
@@ -202,7 +204,7 @@ template <typename Implem> class GRN {
 
 	void updateRegulNames() {
 		int id = 0;
-		umap<string, size_t> newReguls;
+		map<string, size_t> newReguls;
 		for (auto& i : proteinsRefs[to_underlying(ProteinType::regul)]) {
 			ostringstream name;
 			name << "r" << id++;
