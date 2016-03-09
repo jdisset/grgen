@@ -18,14 +18,14 @@ using std::ostringstream;
 template <typename Implem> class GRN {
 	struct GAConfiguration {
 		// crossover
-		static constexpr double ALIGN_TRESHOLD = 0.6;
-		static constexpr double APPEND_NON_ALIGNED = 0.3;
+		static constexpr double ALIGN_TRESHOLD = 0.5;
+		static constexpr double APPEND_NON_ALIGNED = 0.2;
 		static constexpr unsigned int MAX_REGULS = 50;
 
 		// mutation
-		double MODIF_RATE = 0.7;
-		double ADD_RATE = 0.15;
-		double DEL_RATE = 0.15;
+		double MODIF_RATE = 0.8;
+		double ADD_RATE = 0.1;
+		double DEL_RATE = 0.1;
 	};
 
 	friend Implem;
