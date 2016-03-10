@@ -1,5 +1,5 @@
-#ifndef NOBETA_HPP
-#define NOBETA_HPP
+#ifndef RCIRCLE_HPP
+#define RCIRCLE_HPP
 #include <iostream>
 #include <array>
 #include <vector>
@@ -10,25 +10,23 @@
 
 using namespace std;
 
-struct NoBeta {
+struct RealCircle {
 	// we use 3 coordinates proteins (id, enh, inh)
-	using Protein_t = Protein<4, double, 0, 1>;
+	using Protein_t = Protein<3, double, 0, 1>;
 
-	// we need 2 parameters (alpha)
-	static constexpr unsigned int nbParams = 1;
+	// we need 2 parameters (beta, alpha)
+	static constexpr unsigned int nbParams = 2;
 	// and we produce 2 dimensional signatures (enhnance, inhibit)
 	static constexpr unsigned int nbSignatureParams = 2;
 
 	static const array<pair<double, double>, nbParams> paramsLimits() {
-		return {{{0.5, 3.0}}};
+		return {{{10.0, 20.0}, {0.5, 2.0}}};
 	}
 
-	static constexpr double BETARANGE = 25.0;
 	// helpers for proteins coords
 	static inline double& getId(Protein_t& p) { return p.coords[0]; }
 	static inline double& getEnh(Protein_t& p) { return p.coords[1]; }
 	static inline double& getInh(Protein_t& p) { return p.coords[2]; }
-	static inline double& getBeta(Protein_t& p) { return p.coords[3]; }
 
 	// aliases for ProteinType
 	static constexpr ProteinType pinput = ProteinType::input;
@@ -36,6 +34,8 @@ struct NoBeta {
 	static constexpr ProteinType poutput = ProteinType::output;
 
 	double maxEnhance = 0.0, maxInhibit = 0.0;
+
+	RealCircle() {}
 
 	double getShortestDistance(double a, double b) {
 		double d0 = abs(a - b);
@@ -61,11 +61,9 @@ struct NoBeta {
 		// std::cerr << "maxEnh = " << maxEnhance << ", maxInh = " << maxInhibit << std::endl;
 		for (size_t i = 0; i < grn.actualProteins.size(); ++i) {
 			for (size_t j = 0; j < grn.actualProteins.size(); ++j) {
-				auto& p = grn.actualProteins[j];
 				grn.signatures[i][j] = {
-				    {max(0.0, exp(BETARANGE * getBeta(p) * grn.signatures[i][j][0] - maxEnhance)),
-				     max(0.0,
-				         exp(BETARANGE * getBeta(p) * grn.signatures[i][j][1] - maxInhibit))}};
+				    {max(0.0, exp(grn.params[0] * grn.signatures[i][j][0] - maxEnhance)),
+				     max(0.0, exp(grn.params[0] * grn.signatures[i][j][1] - maxInhibit))}};
 			}
 		}
 	}
@@ -83,7 +81,7 @@ struct NoBeta {
 				}
 				nextProteins.push_back(
 				    max(0.0, grn.actualProteins[j].c +
-				                 (grn.params[0] / static_cast<double>(grn.getNbProteins())) *
+				                 (grn.params[1] / static_cast<double>(grn.getNbProteins())) *
 				                     (enh - inh)));
 			}
 			// Normalizing regul & output proteins concentrations

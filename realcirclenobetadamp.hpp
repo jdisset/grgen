@@ -1,5 +1,5 @@
-#ifndef EVAP_HPP
-#define EVAP_HPP
+#ifndef RCNBDAMP_HPP
+#define RCNBDAMP_HPP
 #include <iostream>
 #include <array>
 #include <vector>
@@ -10,7 +10,7 @@
 
 using namespace std;
 
-struct Evap {
+struct RealCircleNoBetaDamp {
 	// we use 5 coordinates proteins (id, enh, inh, beta, evap)
 	using Protein_t = Protein<5, double, 0, 1>;
 

@@ -10,19 +10,18 @@
 
 using namespace std;
 
-struct Classic {
-	public:
+struct ClassicNoBeta {
 	// we use 3 coordinates proteins (id, enh, inh)
 	static constexpr int IDSIZE = 32;
-	using Protein_t = Protein<3, int, 0, IDSIZE>;
+	using Protein_t = Protein<4, int, 0, IDSIZE>;
 
 	// we need 2 parameters (beta, alpha)
-	static constexpr unsigned int nbParams = 2;
+	static constexpr unsigned int nbParams = 1;
 	// and we produce 2 dimensional signatures (enhnance, inhibit)
 	static constexpr unsigned int nbSignatureParams = 2;
 
 	static const array<pair<double, double>, nbParams> paramsLimits() {
-		return {{{0.5, 2.0}, {0.5, 2.0}}};
+		return {{{0.5, 2.0}}};
 	}
 
 	// helpers for proteins coords
@@ -98,3 +97,4 @@ struct Classic {
 	}
 };
 #endif
+

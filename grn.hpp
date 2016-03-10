@@ -16,6 +16,7 @@ using std::pair;
 using std::ostringstream;
 
 template <typename Implem> class GRN {
+	friend Implem;
 	struct GAConfiguration {
 		// crossover
 		static constexpr double ALIGN_TRESHOLD = 0.5;

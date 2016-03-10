@@ -1,5 +1,5 @@
-#ifndef CLASSIC_HPP
-#define CLASSIC_HPP
+#ifndef RCoords_HPP
+#define RCoords_HPP
 #include <iostream>
 #include <array>
 #include <vector>
@@ -10,11 +10,9 @@
 
 using namespace std;
 
-struct Classic {
-	public:
+struct RealCoords {
 	// we use 3 coordinates proteins (id, enh, inh)
-	static constexpr int IDSIZE = 32;
-	using Protein_t = Protein<3, int, 0, IDSIZE>;
+	using Protein_t = Protein<3, double, 0, 1>;
 
 	// we need 2 parameters (beta, alpha)
 	static constexpr unsigned int nbParams = 2;
@@ -22,13 +20,13 @@ struct Classic {
 	static constexpr unsigned int nbSignatureParams = 2;
 
 	static const array<pair<double, double>, nbParams> paramsLimits() {
-		return {{{0.5, 2.0}, {0.5, 2.0}}};
+		return {{{10.0, 20.0}, {0.5, 2.0}}};
 	}
 
 	// helpers for proteins coords
-	static inline int& getId(Protein_t& p) { return p.coords[0]; }
-	static inline int& getEnh(Protein_t& p) { return p.coords[1]; }
-	static inline int& getInh(Protein_t& p) { return p.coords[2]; }
+	static inline double& getId(Protein_t& p) { return p.coords[0]; }
+	static inline double& getEnh(Protein_t& p) { return p.coords[1]; }
+	static inline double& getInh(Protein_t& p) { return p.coords[2]; }
 
 	// aliases for ProteinType
 	static constexpr ProteinType pinput = ProteinType::input;
@@ -37,7 +35,7 @@ struct Classic {
 
 	double maxEnhance = 0.0, maxInhibit = 0.0;
 
-	Classic() {}
+	double getShortestDistance(double a, double b) { return abs(a - b); }
 
 	template <typename GRN> void updateSignatures(GRN& grn) {
 		grn.signatures.clear();
@@ -48,8 +46,8 @@ struct Classic {
 				auto& p0 = grn.actualProteins[i];
 				auto& p1 = grn.actualProteins[j];
 				grn.signatures[i][j] = {
-				    {static_cast<double>(IDSIZE - abs(getEnh(p0) - getId(p1))),
-				     static_cast<double>(IDSIZE - abs(getInh(p0) - getId(p1)))}};
+				    {static_cast<double>(1.0 - getShortestDistance(getEnh(p0), getId(p1))),
+				     static_cast<double>(1.0 - getShortestDistance(getInh(p0), getId(p1)))}};
 				if (grn.signatures[i][j][0] > maxEnhance) maxEnhance = grn.signatures[i][j][0];
 				if (grn.signatures[i][j][1] > maxInhibit) maxInhibit = grn.signatures[i][j][1];
 			}
@@ -58,8 +56,8 @@ struct Classic {
 		for (size_t i = 0; i < grn.actualProteins.size(); ++i) {
 			for (size_t j = 0; j < grn.actualProteins.size(); ++j) {
 				grn.signatures[i][j] = {
-				    {exp(grn.params[0] * grn.signatures[i][j][0] - maxEnhance),
-				     exp(grn.params[0] * grn.signatures[i][j][1] - maxInhibit)}};
+				    {max(0.0, exp(grn.params[0] * grn.signatures[i][j][0] - maxEnhance)),
+				     max(0.0, exp(grn.params[0] * grn.signatures[i][j][1] - maxInhibit))}};
 			}
 		}
 	}
