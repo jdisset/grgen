@@ -27,6 +27,7 @@ struct Protein {
 			if (coords[i] != b.coords[i]) return false;
 		return c == b.c;
 	}
+
 	bool operator!=(const Protein &b) const { return !(*this == b); }
 
 	// switching between integral or real random distribution
@@ -95,6 +96,112 @@ struct Protein {
 			    static_cast<double>(coords.at(i)) - static_cast<double>(p.coords.at(i)), 2);
 		}
 		return sqrt(sum) / getMaxDistance();
+	}
+};
+
+template <unsigned int nbCoords, typename CoordsType = double, int minCoord = 0,
+          int maxCoord = 1>
+struct HiProtein : public Protein<nbCoords, CoordsType, minCoord, maxCoord> {
+	using json = nlohmann::json;
+	using Base = Protein<nbCoords, CoordsType, minCoord, maxCoord>;
+	static constexpr CoordsType min_coord = minCoord;
+	static constexpr CoordsType max_coord = maxCoord;
+	bool input = false;
+	bool output = false;
+	bool modifiable = false;
+
+	bool operator==(const Protein &b) const {
+		for (size_t i = 0; i < nbCoords; ++i)
+			if (coords[i] != b.coords[i]) return false;
+		if (input != b.input || output != b.output) return false return c == b.c;
+	}
+
+	HiProtein(const decltype(coords) &co, double conc, bool i, bool o, bool m = true)
+	    : coords(co), c(conc), prevc(conc), input(i), output(o), modifiable(m) {
+		for (auto &coo : coords) {
+			coo = std::max(static_cast<CoordsType>(minCoord),
+			               std::min(static_cast<CoordsType>(maxCoord), coo));
+		}
+	}
+	HiProtein(const HiProtein &p)
+	    : coords(p.coords),
+	      c(p.c),
+	      prevc(p.prevc),
+	      input(p.input),
+	      output(p.output),
+	      modifiable(p.modifiable){};
+
+	HiProtein() {
+		// Constructs a protein with random coords and random I/O
+		for (auto &i : coords) i = getRandomCoord();
+		std::uniform_int_distribution<int> dInt(0, 1);
+		input = dInt(grnRand);
+		output = dInt(grnRand);
+		modifiable = true;
+	}
+
+	explicit HiProtein(const json &o) {
+		// constructs a protein from a json object
+		assert(o.count("coords"));
+		assert(o.count("c"));
+		assert(o.count("I"));
+		assert(o.count("O"));
+		assert(o.count("M"));
+		c = o.at("c");
+		input = o.at("I");
+		output = o.at("O");
+		modifiable = o.at("M");
+		if (o.count("pc")) prevc = o.at("pc");
+		auto vcoords = o.at("coords").get<std::vector<CoordsType>>();
+		assert(vcoords.size() == coords.size());
+		for (size_t i = 0; i < vcoords.size(); ++i) coords[i] = vcoords[i];
+	}
+
+	json toJSON() const {
+		json o;
+		o["coords"] = coords;
+		o["c"] = c;
+		o["pc"] = prevc;
+		o["I"] = input;
+		o["O"] = output;
+		o["M"] = modifiable;
+		return o;
+	}
+
+	void mutate() {
+		std::uniform_int_distribution<int> dReal(0, nbCoords + 2);
+		int mutated = dInt(grnRand);
+		coords[mutated] = getRandomCoord();
+		if (modifiable) {
+			std::uniform_int_distribution<int> dBool(0, 1);
+			input = dBool(grnRand);
+			output = dBool(grnRand);
+		}
+	}
+
+	static constexpr double getMaxDistance() {
+		return sqrt(std::pow((maxCoord - minCoord), 2) * nbCoords);
+	}
+
+	double getDistanceWith(const Protein &p) {
+		double sum = 0;
+		for (size_t i = 0; i < nbCoords; ++i) {
+			sum += std::pow(
+			    static_cast<double>(coords.at(i)) - static_cast<double>(p.coords.at(i)), 2);
+		}
+		return sqrt(sum) / getMaxDistance();
+	}
+	bool modifiable = true;
+	std::string typeToString(ProteinType t) const {
+		switch (t) {
+			case ProteinType::input:
+				return "input";
+			case ProteinType::regul:
+				return "regul";
+			case ProteinType::output:
+				return "output";
+		}
+		return "unknown_type";
 	}
 };
 #endif
