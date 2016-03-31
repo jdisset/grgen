@@ -294,7 +294,7 @@ template <typename Implem> struct MGRN {
 	}
 
 	std::vector<MGRN<Implem>*> getListOfAllGRNs() {
-		// returns all of GRNS present in the whole network
+		// returns all GRNS present in the whole network
 		std::unordered_set<MGRN<Implem>*> visited;
 		std::vector<MGRN<Implem>*> toVisit;
 		toVisit.insert(master);
@@ -352,9 +352,8 @@ template <typename Implem> struct MGRN {
 			inputProteins = pobj.at("namedOut").get<decltype(inputProteins)>();
 		assert(pobj.count("plist"));
 		actualProteins.resize(pobj.at("plist").size());
-		for (auto& p : pobj.at("plist")) {
-			actualProteins.push_back(Protein(p));
-		}
+		for (auto& p : pobj.at("plist")) actualProteins.push_back(Protein(p));
+		updateAllProteinsPtr();
 		updateSignatures();
 	}
 
@@ -388,8 +387,8 @@ template <typename Implem> struct MGRN {
 				auto allP = getListOfAllProteins();
 				std::uniform_int_distribution<size_t> dice(0, allP.size() - 1);
 				size_t id = dice(grnRand);
-				allP.second->mutate();
-				allP.first->enforceOneInputOneOutput();
+				allP[id].second->mutate();
+				allP[id].first->enforceOneInputOneOutput();
 			} break;
 			case 1: {
 				// add prot

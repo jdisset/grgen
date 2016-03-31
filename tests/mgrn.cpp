@@ -1,8 +1,8 @@
-#include "catch.hpp"
-#include "../common.h"
-#include "../mgrn.hpp"
-#include "../json/json.hpp"
 #include <algorithm>
+#include "../common.h"
+#include "../json/json.hpp"
+#include "../mgrn.hpp"
+#include "catch.hpp"
 
 template <typename T> bool inVector(std::vector<T> vec, T elem) {
 	return std::find(vec.begin(), vec.end(), elem) != vec.end();
@@ -19,13 +19,13 @@ template <typename G> void atLeastOneInputOneOutput(G &g) {
 	REQUIRE(o);
 }
 
-template <typename T> ptrInVector(std::vector<T> vec, T *adr) {
+template <typename T> bool ptrInVector(std::vector<T> vec, T *adr) {
 	for (auto &e : vec)
 		if (&e == adr) return true;
 	return false;
 }
 
-template <typename K, typename T> inMap(std::map<K, T> m, T elem) {
+template <typename K, typename T> bool inMap(std::map<K, T> m, T elem) {
 	for (auto &e : m)
 		if (&e.second == elem) return true;
 	return false;
@@ -161,7 +161,7 @@ template <typename T> void deterministicGRN() {
 
 template <typename T> void testMGRN() {
 	// construction
-	auto mgrn = constructGRN<T>();
+	auto mgrn = constructRandomMGRN<T>();
 
 	// deletion
 	size_t nbP = mgrn.getNbOwnProteins();
@@ -175,7 +175,7 @@ template <typename T> void testMGRN() {
 	REQUIRE(mgrn.getNbOwnProteins(ProteinType::input) == nbIn);
 	REQUIRE(mgrn.getNbOwnProteins(ProteinType::output) == nbOut);
 	REQUIRE(mgrn.getNbOwnProteins(ProteinType::regul) == nbP - nbIn - nbOut - N);
-	for (int i = 0; i < 500) mgrn.subNets[0].deleteRandomProtein();
+	for (int i = 0; i < 500; ++i) mgrn.subNets[0].deleteRandomProtein();
 	checkMGRNIntegrity(mgrn, &mgrn);
 
 	// serialization / deserialization
@@ -196,8 +196,8 @@ template <typename T> void testMGRN() {
 		auto tmp = mgrn;
 		mgrn.mutate();
 		double dist = MGRN<T>::relativeDistance(tmp, mgrn);
-		REQUIRE(dist > 0.0)
-		REQUIRE(dist < 1.0)
+		REQUIRE(dist > 0.0);
+		REQUIRE(dist < 1.0);
 	}
 	REQUIRE(otherCopy != mgrn);
 	checkMGRNIntegrity(mgrn, &mgrn);
@@ -223,7 +223,7 @@ template <typename T> void testMGRN() {
 	avgDistDiff /= (double)nbCrossovers;
 	REQUIRE(avgDist0 > 0);
 	REQUIRE(avgDist1 > 0);
-	REQUIRE(abs(avgDistDiff) < 0.05);
+	REQUIRE(std::abs(avgDistDiff) < 0.05);
 	REQUIRE(nbDifferentOffspring > nbCrossovers * 0.5);
 }
 
