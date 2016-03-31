@@ -3,9 +3,10 @@
 #include <assert.h>
 #include <array>
 #include <map>
-#include <unordered_map>
-#include <string>
 #include <sstream>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include "common.h"
 
 using std::array;
@@ -14,29 +15,18 @@ using std::map;
 using std::string;
 using std::pair;
 using std::ostringstream;
+using std::tuple;
 template <typename Implem> struct MGRN {
-	struct GAConfiguration {
-		// crossover
-		static constexpr double ALIGN_TRESHOLD = 0.5;
-		static constexpr double APPEND_NON_ALIGNED = 0.2;
-		static constexpr unsigned int MAX_REGULS = 40;
-
-		// proteins
-		double MODIF_PROT_RATE = 10;
-		double ADD_PROT_RATE = 2;
-		double DEL_PROT_RATE = 2;
-		double ADD_GRN_RATE = 0.5;
-		double DEL_GRN_RATE = 0.5;
-	};
-
 	friend Implem;
 	using Protein = typename Implem::Protein_t;
 	using json = nlohmann::json;
 	using InfluenceVec = array<double, Implem::nbSignatureParams>;
 	template <typename A, typename B> using umap = std::unordered_map<A, B>;
-	map<string, size_t>> inputProteins, outputProteins;
+	map<string, size_t> inputProteins, outputProteins;
 	array<double, Implem::nbParams> params{};  // alpha, beta, ...
 	vector<pair<Protein*, bool>> allProteinsPtr;
+	size_t firstRegulPtrIndex = 0;
+	size_t firstOutputPtrIndex = 0;
 	vector<Protein> actualProteins;
 	vector<MGRN> subNets;
 	vector<vector<InfluenceVec>>
@@ -45,8 +35,21 @@ template <typename Implem> struct MGRN {
 	MGRN* parent = nullptr;
 	Implem implem;
 
-	MGRN(const MGRN& grn, MGRN* m = this, MGRN* p = nullptr)
+	// mutation & crossover params
+	// mutation
+	double MODIF_PROT_RATE = 10;
+	double ADD_PROT_RATE = 2;
+	double DEL_PROT_RATE = 2;
+	double ADD_GRN_RATE = 0.5;
+	double DEL_GRN_RATE = 0.5;
+	// crossover
+	double ALIGN_TRESHOLD = 0.5;
+	double APPEND_NON_ALIGNED = 0.2;
+	unsigned int MAX_REGULS = 40;
+
+	MGRN(const MGRN& grn, MGRN* m = nullptr, MGRN* p = nullptr)
 	    : params(grn.params), actualProteins(grn.actualProteins), master(m), parent(p) {
+		if (master == nullptr) master = this;
 		for (auto& g : grn.subNets) {
 			subNets.push_back(GRN(g, m, this));
 		}
@@ -57,17 +60,7 @@ template <typename Implem> struct MGRN {
 	/**************************************
 	 *               GET
 	 *************************************/
-	inline double getProteinConcentration(const string& name, const ProteinType t) const {
-		try {
-			return actualProteins[proteinsRefs[to_underlying(t)].at(name)].c;
-		} catch (...) {
-			std::cerr << "Exception raised in getProteinConcentration for name = " << name
-			          << ", proteintype = " << to_underlying(t) << std::endl;
-			exit(0);
-		}
-	}
-
-	size_t getNbProteins() const { return internalGRN.proteinsSize(); }
+	size_t getNbProteins() const { return actualProteins.size(); }
 
 	Protein& getProtein(ProteinType t, const string& name) {
 		if (master != this) throw std::invalid_argument("getProtein called on a subGRN");
@@ -86,7 +79,6 @@ template <typename Implem> struct MGRN {
 	/**************************************
 	 *               SET
 	 *************************************/
-	inline void reset() { internalGRN.reset(); }
 
 	void setProteinConcentration(const string& name, ProteinType t, double c) {
 		if (master != this) throw std::invalid_argument("setProteinConc on a subGRN");
@@ -122,7 +114,7 @@ template <typename Implem> struct MGRN {
 		else if (t != ProteinType::input && t != ProteinType::output)
 			throw std::invalid_argument("MGRN only has named inputs & outputs");
 		else {
-			auto protid = internalGRN.addProtein(p);
+			auto protid = addProtein(p);
 			if (t == ProteinType::input)
 				inputProteins[name] = protid;
 			else if (t == ProteinType::output)
@@ -148,6 +140,8 @@ template <typename Implem> struct MGRN {
 		}
 	}
 
+	void randomReguls(size_t n) { addRandomProtein(n); }
+
 	template <typename T>
 	static tuple<vector<tuple<size_t, size_t, double>>, vector<size_t>, vector<size_t>>
 	    getAligned(const vector<T>& a, const vector<T>& b, double threshold = 1.0) {
@@ -172,8 +166,8 @@ template <typename Implem> struct MGRN {
 				}
 			}
 			aligned.push_back({aId[best.first], bId[best.second], minDist});
-			aId.remove(best.first);
-			bId.remove(best.second);
+			aId.erase(std::begin(aId) + static_cast<long>(best.first));
+			bId.erase(std::begin(bId) + static_cast<long>(best.second));
 		}
 		return {aligned, aId, bId};
 	}
@@ -189,27 +183,28 @@ template <typename Implem> struct MGRN {
 		// except if it is an input / output ? or maybe use allProteinsPtr?
 		double dProt = 0.0;
 		auto alignedProts = getAligned(a.actualProteins, b.actualProteins);
-		for (auto& a : get<0>(alignedProts)) dProt += get<2>(a);
-		double nbNotAligned = get<1>(alignedProts).size() + get<2>(alignedProts).size();
+		for (auto& al : std::get<0>(alignedProts)) dProt += std::get<2>(al);
+		double nbNotAligned =
+		    std::get<1>(alignedProts).size() + std::get<2>(alignedProts).size();
 		dProt += nbNotAligned;
-		double divisor = nbNotAligned + (double)get<0>(alignedProts).size();
+		double divisor = nbNotAligned + std::get<0>(alignedProts).size();
 		if (divisor > 0) dProt = dProt / divisor;
-		if (subNets.size() == 0) {
+		if (a.subNets.size() + b.subNets.size() == 0) {
 			return dProt;
 		} else {
 			double dG = 0.0;
 			auto alignedGrns = getAligned(a.subNets, b.subNets);
-			for (auto& a : get<0>(alignedGrns)) dG += get<2>(a);
-			double nbNotAligned = get<1>(alignedGrns).size() + get<2>(alignedGrns).size();
-			dG += nbNotAligned;
-			double divGrn = nbNotAligned + (double)get<0>(alignedGrns).size();
+			for (auto& al : std::get<0>(alignedGrns)) dG += std::get<2>(al);
+			double nbNotAlignedGrn =
+			    std::get<1>(alignedGrns).size() + std::get<2>(alignedGrns).size();
+			dG += nbNotAlignedGrn;
+			double divGrn = nbNotAlignedGrn + (double)std::get<0>(alignedGrns).size();
 			if (divGrn > 0) dG = dG / divGrn;
 			return protVsGrn * dProt + (1.0 - protVsGrn) * dG;
 		}
 	}
 
 	size_t getNbProteins() { return actualProteins.size(); }
-	void randomReguls(size_t n) { internalGRN.randomReguls(n); }
 
 	/**************************************
 	 *          UPDATES
@@ -225,7 +220,7 @@ template <typename Implem> struct MGRN {
 		}
 		for (auto& p : actualProteins)
 			if (p.input && !p.output) allProteinsPtr.push_back(&p);
-		firstRegulPtrIndex = allProteins.size();
+		firstRegulPtrIndex = allProteinsPtr.size();
 		// reguls
 		for (auto& p : actualProteins)
 			if ((p.input && p.output) || (!p.input && !p.output)) allProteinsPtr.push_back(&p);
@@ -235,7 +230,7 @@ template <typename Implem> struct MGRN {
 				if (p.input && p.output) allProteinsPtr.push_back(&p);
 			}
 		}
-		firstOutputPtrIndex = allProteins.size();
+		firstOutputPtrIndex = allProteinsPtr.size();
 		// outputs
 		for (auto& g : subNets) {
 			for (auto& p : g.actualProteins) {
@@ -243,8 +238,6 @@ template <typename Implem> struct MGRN {
 				if (p.input && !p.output) allProteinsPtr.push_back(&p);
 			}
 		}
-		for (auto& p : g.actualProteins)
-			if (!p.input && p.output) allProteinsPtr.push_back(&p);
 	}
 
 	void updateSignatures() { implem.updateSignatures(*this); }
@@ -269,17 +262,18 @@ template <typename Implem> struct MGRN {
 		updateSignatures();
 	}
 
-	void randomReguls(size_t n) {}
-
-	size_t pipedRoulette(const std::vector<double>& coefs) {
+	size_t pipedRoulette(const std::vector<double>& rawCoefs) {
+		auto coefs = rawCoefs;
 		assert(coefs.size() > 0);
 		double tot = 0.0;
 		for (auto& c : coefs) tot += c;
-		uniform_real_distribution<double> dice(0, 1);
+		assert(tot > 0.0);
+		for (auto& c : coefs) c /= tot;
+		std::uniform_real_distribution<double> dice(0, 1);
 		size_t i = 0;
 		double roll = dice(grnRand);
 		double sum = coefs[0];
-		while (i < coefs && roll > sum) {
+		while (i < coefs.size() && roll > sum) {
 			++i;
 			sum += coefs[i];
 		}
@@ -293,47 +287,56 @@ template <typename Implem> struct MGRN {
 			if (p.input) inp = true;
 			if (p.output) out = true;
 		}
-		uniform_int_distribution<size_t> dice(0, actualProteins.size() - 1);
+		std::uniform_int_distribution<size_t> dice(0, actualProteins.size() - 1);
 		if (!inp) actualProteins[dice(grnRand)].input = true;
 		if (!out) actualProteins[dice(grnRand)].output = true;
 		parent->updateAllProteinsPtr();
 	}
 
-	void mutate() {
-		size_t operation = pipedRoulette(
-		    {{MODIF_PROT_RATE, ADD_PROT_RATE, DEL_PROT_RATE, ADD_GRN_RATE, DEL_GRN_RATE}});
-		switch (operation) {
-			case 0: {
-				// modif
-				auto allP = getListOfAllProteins();
-				uniform_int_distribution<size_t> dice(0, allP.size() - 1);
-				size_t id = dice(grnRand);
-				allP.second->mutate();
-				allP.first->enforceOneInputOneOutput();
-			} break;
-			case 1: {
-				// add
-				auto allG = getListOfAllGRNs();
-				uniform_int_distribution<size_t> dice(0, allG.size() - 1);
-				allG[dice(grnRand)]->addRandomProtein();
-			} break;
-			case 2: {
-				// del
-				auto allG = getListOfAllGRNs();
-				uniform_int_distribution<size_t> diceG(0, allG.size() - 1);
-				auto g = allG[diceG(grnRand)];
-				uniform_int_distribution<size_t> diceP(0, g->actualProteins.size() - 1);
-				deleteProtein(diceP(grnRand));
-			} break;
+	std::vector<MGRN<Implem>*> getListOfAllGRNs() {
+		// returns all of GRNS present in the whole network
+		std::unordered_set<MGRN<Implem>*> visited;
+		std::vector<MGRN<Implem>*> toVisit;
+		toVisit.insert(master);
+		while (toVisit.size()) {
+			auto g = toVisit.back();
+			toVisit.pop_back();
+			visited.insert(g);
+			for (auto& sg : g->subNets)
+				if (!visited.count(&sg)) toVisit.push_back(&sg);
 		}
-		// modify/add/delete Prot (from all grn)
-		// add grn (wherever)
-		// delete grn (only a leaf)
+		std::vector<MGRN<Implem>*> result;
+		result.resize(visited.size());
+		for (auto& g : visited) result.push_back(g);
+		return result;
+	}
+	std::vector<std::pair<MGRN<Implem>*, Protein*>> getListOfAllProteins() {
+		// returns all of the proteins present in the whole network
+		std::vector<std::pair<MGRN<Implem>*, Protein*>> result;
+		auto& allGrns = getListOfAllGRNs();
+		for (auto& g : allGrns)
+			for (auto& p : g->actualProteins) result.push_back({g, &p});
+		return result;
+	}
+
+	void deleteSubNet(MGRN<Implem>* g) {
+		size_t i;
+		for (i = 0; i < subNets.size(); ++i)
+			if (&subNets[i] == g) break;
+		deleteSubNet(i);
+	}
+	void deleteSubNet(size_t i) {
+		assert(i < subNets.size());
+		subNets.erase(subNets.begin() + i);
+	}
+	void deleteProtein(size_t i) {
+		assert(i < actualProteins.size());
+		actualProteins.erase(actualProteins.begin() + i);
 	}
 
 	/**************************************
-	   *              JSON
-	   *************************************/
+	     *              JSON
+	*************************************/
 	MGRN(const string& js) {
 		auto o = json::parse(js);
 		assert(o.count("params"));
@@ -342,41 +345,103 @@ template <typename Implem> struct MGRN {
 		size_t i = 0;
 		for (auto& p : par) params[i++] = p.get<double>();
 		assert(o.count("proteins"));
-		for (size_t t = to_underlying(ProteinType::input);
-		     t <= to_underlying(ProteinType::output); ++t) {
-			json prots = o.at("proteins").at(typeToString((ProteinType)t));
-			for (json::iterator it = prots.begin(); it != prots.end(); ++it) {
-				addProtein((ProteinType)t, it.key(), Protein(it.value()));
-			}
+		auto& pobj = o.at("proteins");
+		if (pobj.count("namedIn"))
+			inputProteins = pobj.at("namedIn").get<decltype(inputProteins)>();
+		if (pobj.count("namedOut"))
+			inputProteins = pobj.at("namedOut").get<decltype(inputProteins)>();
+		assert(pobj.count("plist"));
+		actualProteins.resize(pobj.at("plist").size());
+		for (auto& p : pobj.at("plist")) {
+			actualProteins.push_back(Protein(p));
 		}
 		updateSignatures();
 	}
 
 	string toJSON() const {
 		json protObj;
-		for (size_t t = 0; t < proteinsRefs.size(); ++t) {
-			json pr;
-			for (auto p = proteinsRefs[t].begin(); p != proteinsRefs[t].end(); ++p) {
-				pr[p->first] = actualProteins[p->second].toJSON();
-			}
-			protObj[typeToString((ProteinType)t)] = pr;
-		}
+		if (inputProteins.size()) protObj["namedIn"] = inputProteins;
+		if (outputProteins.size()) protObj["namedOut"] = outputProteins;
+		protObj["plist"] = json::array();
+		for (auto& p : actualProteins) protObj["plist"].push_back(p.toJSON());
 		json o;
-		o["proteins"] = protObj;
 		o["params"] = params;
+		o["proteins"] = protObj;
+		if (subNets.size()) {
+			json grnObj;
+			for (auto& g : subNets) grnObj.push_back(g.toJSON());
+			o["subnets"] = grnObj;
+		}
 		return o.dump(2);
 	}
+
+	/**************************************
+	 *       MUTATION & CROSSOVER
+	 *************************************/
+
+	void mutate() {
+		size_t operation = pipedRoulette(
+		    {{MODIF_PROT_RATE, ADD_PROT_RATE, DEL_PROT_RATE, ADD_GRN_RATE, DEL_GRN_RATE}});
+		switch (operation) {
+			case 0: {
+				// modif prot
+				auto allP = getListOfAllProteins();
+				std::uniform_int_distribution<size_t> dice(0, allP.size() - 1);
+				size_t id = dice(grnRand);
+				allP.second->mutate();
+				allP.first->enforceOneInputOneOutput();
+			} break;
+			case 1: {
+				// add prot
+				auto allG = getListOfAllGRNs();
+				std::uniform_int_distribution<size_t> dice(0, allG.size() - 1);
+				allG[dice(grnRand)]->addRandomProtein();
+			} break;
+			case 2: {
+				// del prot
+				auto allG = getListOfAllGRNs();
+				std::uniform_int_distribution<size_t> diceG(0, allG.size() - 1);
+				auto g = allG[diceG(grnRand)];
+				if (g->actualProteins.size() > 1) {
+					std::uniform_int_distribution<size_t> diceP(0, g->actualProteins.size() - 1);
+					auto p = g->actualProteins[diceP(grnRand)];
+					if (p->modifiable) {
+						deleteProtein(diceP(grnRand));
+						g->enforceOneInputOneOutput();
+					}
+				}
+			} break;
+			case 3: {
+				// add grn (wherever)
+				auto allG = getListOfAllGRNs();
+				std::uniform_int_distribution<size_t> diceG(0, allG.size() - 1);
+				auto g = allG[diceG(grnRand)];
+				MGRN<Implem> ng;
+				ng.addRandomProtein();
+				ng.enforceOneInputOneOutput();
+				g.addGrn(ng);
+			} break;
+			case 4: {
+				// delete grn (only a leaf)
+				auto allG = getListOfAllGRNs();
+				if (allG.size() > 1) {
+					vector<MGRN<Implem>*> leaves;
+					for (auto& g : allG)
+						if (g->subNets.size() == 0) leaves.push_back(g);
+					std::uniform_int_distribution<size_t> diceG(0, leaves.size() - 1);
+					auto g = leaves[diceG(grnRand)];
+					g->parent->deleteSubNet(g);
+				}
+			} break;
+		}
+	}
+
+	MGRN<Implem> crossover(const MGRN<Implem>& other) {
+		return MGRN::crossover(*this, other);
+	}
+
+	static MGRN<Implem> crossover(const MGRN<Implem>& g0, const MGRN<Implem>&) {
+		return g0;
+	};
 };
-/**************************************
- *       MUTATION & CROSSOVER
- *************************************/
-void mutate() { internalGRN.mutate() : }
-
-MGRN crossover(const MGRN& other) { return MGRN::crossover(*this, other); }
-
-static MGRN crossover(const MGRN& g0, const MGRN& g1) {
-	return MGRN(decltype(internalGRN)::crossover(g0.internalGRN, g1.internalGRN));
-}
-}
-;
 #endif
