@@ -1,6 +1,7 @@
 #include <algorithm>
 #include "../common.h"
 #include "../json/json.hpp"
+#include "../mgclassic.hpp"
 #include "../mgrn.hpp"
 #include "catch.hpp"
 
@@ -227,7 +228,4 @@ template <typename T> void testMGRN() {
 	REQUIRE(nbDifferentOffspring > nbCrossovers * 0.5);
 }
 
-TEST_CASE("MGRN declaration, init & serialization", "[mgrn]") {
-	testMGRN<Classic>();
-	testMGRN<RealCircle>();
-}
+TEST_CASE("MGRN declaration, init & serialization", "[mgrn]") { testMGRN<MGClassic>(); }

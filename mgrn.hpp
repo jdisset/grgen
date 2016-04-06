@@ -21,6 +21,8 @@ template <typename Implem> struct MGRN {
 	using Protein = typename Implem::Protein_t;
 	using json = nlohmann::json;
 	using InfluenceVec = array<double, Implem::nbSignatureParams>;
+	using signature_t =
+	    vector<std::pair<Protein*, vector<std::pair<Protein*, InfluenceVec>>>>;
 	template <typename A, typename B> using umap = std::unordered_map<A, B>;
 	map<string, size_t> inputProteins, outputProteins;
 	array<double, Implem::nbParams> params{};  // alpha, beta, ...
@@ -29,8 +31,7 @@ template <typename Implem> struct MGRN {
 	size_t firstOutputPtrIndex = 0;
 	vector<Protein> actualProteins;
 	vector<MGRN> subNets;
-	vector<vector<InfluenceVec>>
-	    signatures;  // stores the influence of one protein onto the others (p0
+	signature_t signatures;  // stores the influence of one protein onto the others (p0
 	MGRN* master = this;
 	MGRN* parent = nullptr;
 	Implem implem;
@@ -205,10 +206,57 @@ template <typename Implem> struct MGRN {
 	}
 
 	size_t getNbProteins() { return actualProteins.size(); }
+	size_t getNbOwnProteins() { return actualProteins.size(); }
+	size_t getNbOwnProteins(const ProteinType& t) {
+		switch (t) {
+			case (ProteinType::input):
+				return firstRegulPtrIndex;
+			case (ProteinType::regul):
+				return firstOutputPtrIndex - firstRegulPtrIndex;
+			default:
+				return actualProteins.size() - firstOutputPtrIndex;
+		}
+	}
 
 	/**************************************
 	 *          UPDATES
 	 *************************************/
+	void updateSignatures() {
+		/*
+		When step is called, a grn needs to update the concentration of every of its actual
+		Proteins. Thus, updateSignatures needs to generate, for every protein* p0 needing to
+		be updated by this grn, the list of every protein* p1 (including itself) influencing
+		p0 (p1 might come from a parent or a sub net), as well as the corresponding
+		influenceVec (the actual signature values, e.g.  enhance, inhibit...). The signatures
+		thus tell which proteins should be updated and how.
+		*/
+		signatures.clear();
+		signatures.resize(allProteinsPtr.size());
+		for (size_t i = 0; i < allProteinsPtr.size(); ++i) {
+			if (allProteinsPtr[i].second) {
+				auto& p = allProteinsPtr[i];
+				if (parent || !p.input) {
+					// same grn protein
+					// its influence pool is all of the input + reguls proteins of this grn
+					vector<std::pair<Protein*, InfluenceVec>> influencePool;
+					influencePool.reserve(allProteinsPtr.size());
+					for (size_t j = 0; j < firstOutputPtrIndex; ++j) {
+						auto& p1 = allProteinsPtr[j];
+						influencePool.push_back({p1, Implem::getInfluenceVec(p, p1, *this)});
+					}
+					if (parent && (p.input)) {
+						// p is also influenced by parent's proteins
+						for (size_t j = 0; j < parent->firstOutputPtrIndex; ++j) {
+							auto& p1 = parent->allProteinsPtr[j];
+							influencePool.push_back({p1, Implem::getInfluenceVec(p, p1, *parent)});
+						}
+					}
+					signatures.push_back({p, influencePool});
+				}
+			}
+		}
+		for (auto& sg : subNets) sg.updateSignatures();
+	}
 	void updateAllProteinsPtr() {
 		allProteinsPtr = vector<Protein*>();
 		// we put inputs at the beginning
@@ -240,11 +288,10 @@ template <typename Implem> struct MGRN {
 		}
 	}
 
-	void updateSignatures() { implem.updateSignatures(*this); }
-
-	vector<vector<InfluenceVec>> getSignatures() { return signatures; }
+	signature_t getSignatures() { return signatures; }
 
 	void step(unsigned int nbSteps = 1) { implem.step(*this, nbSteps); }
+
 	inline void reset() {
 		for (auto& p : actualProteins) p.reset();
 		for (auto& g : subNets) g.reset();

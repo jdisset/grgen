@@ -3,12 +3,12 @@
 
 #include <assert.h>
 #include <array>
-#include <vector>
-#include <unordered_set>
-#include <string>
 #include <random>
+#include <string>
 #include <type_traits>
+#include <unordered_set>
 #include <utility>
+#include <vector>
 #include "common.h"
 
 #define MULTIPLE_MUTATION_PROBA 0.1
@@ -101,7 +101,7 @@ struct Protein {
 
 template <unsigned int nbCoords, typename CoordsType = double, int minCoord = 0,
           int maxCoord = 1>
-struct HiProtein : public Protein<nbCoords, CoordsType, minCoord, maxCoord> {
+struct HiProtein {
 	using json = nlohmann::json;
 	using Base = Protein<nbCoords, CoordsType, minCoord, maxCoord>;
 	static constexpr CoordsType min_coord = minCoord;
@@ -109,11 +109,16 @@ struct HiProtein : public Protein<nbCoords, CoordsType, minCoord, maxCoord> {
 	bool input = false;
 	bool output = false;
 	bool modifiable = false;
+	std::array<CoordsType, nbCoords>
+	    coords{};                       // proteins coords (id, enh, inh for example)
+	double c = INIT_CONCENTRATION;      // current concentration
+	double prevc = INIT_CONCENTRATION;  // previous concentration
 
-	bool operator==(const Protein &b) const {
+	bool operator==(const HiProtein &b) const {
 		for (size_t i = 0; i < nbCoords; ++i)
 			if (coords[i] != b.coords[i]) return false;
-		if (input != b.input || output != b.output) return false return c == b.c;
+		if (input != b.input || output != b.output) return false;
+		return c == b.c;
 	}
 
 	HiProtein(const decltype(coords) &co, double conc, bool i, bool o, bool m = true)
@@ -169,7 +174,7 @@ struct HiProtein : public Protein<nbCoords, CoordsType, minCoord, maxCoord> {
 	}
 
 	void mutate() {
-		std::uniform_int_distribution<int> dReal(0, nbCoords + 2);
+		std::uniform_int_distribution<int> dInt(0, nbCoords + 2);
 		int mutated = dInt(grnRand);
 		coords[mutated] = getRandomCoord();
 		if (modifiable) {
@@ -183,7 +188,7 @@ struct HiProtein : public Protein<nbCoords, CoordsType, minCoord, maxCoord> {
 		return sqrt(std::pow((maxCoord - minCoord), 2) * nbCoords);
 	}
 
-	double getDistanceWith(const Protein &p) {
+	double getDistanceWith(const HiProtein &p) {
 		double sum = 0;
 		for (size_t i = 0; i < nbCoords; ++i) {
 			sum += std::pow(
@@ -191,7 +196,6 @@ struct HiProtein : public Protein<nbCoords, CoordsType, minCoord, maxCoord> {
 		}
 		return sqrt(sum) / getMaxDistance();
 	}
-	bool modifiable = true;
 	std::string typeToString(ProteinType t) const {
 		switch (t) {
 			case ProteinType::input:
@@ -202,6 +206,18 @@ struct HiProtein : public Protein<nbCoords, CoordsType, minCoord, maxCoord> {
 				return "output";
 		}
 		return "unknown_type";
+	}
+	// switching between integral or real random distribution
+	template <typename T = CoordsType>
+	typename std::enable_if<!std::is_integral<T>::value, T>::type getRandomCoord() {
+		std::uniform_real_distribution<double> distribution(static_cast<double>(minCoord),
+		                                                    static_cast<double>(maxCoord));
+		return static_cast<CoordsType>(distribution(grnRand));
+	}
+	template <typename T = CoordsType>
+	typename std::enable_if<std::is_integral<T>::value, T>::type getRandomCoord() {
+		std::uniform_int_distribution<int> distribution(minCoord, maxCoord);
+		return static_cast<CoordsType>(distribution(grnRand));
 	}
 };
 #endif
