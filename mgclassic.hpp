@@ -14,7 +14,7 @@ struct MGClassic {
  public:
 	// we use 3 coordinates proteins (id, enh, inh)
 	static constexpr int IDSIZE = 32;
-	using Protein_t = Protein<3, int, 0, IDSIZE>;
+	using Protein_t = HiProtein<3, int, 0, IDSIZE>;
 
 	// we need 2 parameters (beta, alpha)
 	static constexpr unsigned int nbParams = 2;
@@ -39,7 +39,7 @@ struct MGClassic {
 		         exp(-grn.params[0] * (abs(getId(*p) - getInh(*p1))))}};
 	}
 
-	template <typename GRN> void step(GRN& grn, unsigned int nbSteps) {
+	template <typename GRN> static void step(GRN& grn, unsigned int nbSteps) {
 		for (unsigned int step = 0; step < nbSteps; ++step) {
 			double sumConcentration = 0.0;
 			for (auto& s : grn.signatures) {
@@ -49,7 +49,7 @@ struct MGClassic {
 					enh += infl.first->c * infl.second[0];
 					inh += infl.first->c * infl.second[1];
 				}
-				p.prevc = max(
+				p->prevc = max(
 				    0.0,
 				    p->c + (grn.params[1] / static_cast<double>(s.second.size())) * (enh - inh));
 				sumConcentration += p->prevc;

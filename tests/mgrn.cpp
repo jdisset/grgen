@@ -14,7 +14,7 @@ template <typename G> void atLeastOneInputOneOutput(G &g) {
 	bool o = false;
 	for (auto &p : g.actualProteins) {
 		if (p.input) i = true;
-		if (p.output) i = true;
+		if (p.output) o = true;
 	}
 	REQUIRE(i);
 	REQUIRE(o);
@@ -27,17 +27,20 @@ template <typename T> bool ptrInVector(std::vector<T> vec, T *adr) {
 }
 
 template <typename K, typename T> bool inMap(std::map<K, T> m, T elem) {
-	for (auto &e : m)
-		if (&e.second == elem) return true;
+	for (auto &e : m) {
+		if (e.second == elem) return true;
+	}
+
 	return false;
 }
 
 template <typename P> void checkProteinLimits(P &p) {
 	for (auto &c : p.coords) {
-		REQUIRE(c < P::max_coord);
-		REQUIRE(c > P::min_coord);
+		REQUIRE(c <= P::max_coord);
+		REQUIRE(c >= P::min_coord);
 	}
-	REQUIRE(p.c > 0);
+	REQUIRE(p.c >= 0);
+	REQUIRE(p.prevc >= 0);
 }
 
 template <typename G> void checkProteinsLimits(G &g) {
@@ -46,13 +49,11 @@ template <typename G> void checkProteinsLimits(G &g) {
 
 template <typename G> void checkMGRNIntegrity(G &g, G *topLevel) {
 	REQUIRE(g.master == topLevel);
+	for (auto &sg : g.subNets) REQUIRE(sg.parent == &g);
 	atLeastOneInputOneOutput(g);
 	checkProteinsPtrIntegrity(g);
 	checkProteinsLimits(g);
-	for (auto &sg : g.subNets) {
-		REQUIRE(sg.parent == &sg);
-		checkMGRNIntegrity(sg, topLevel);
-	}
+	for (auto &sg : g.subNets) checkMGRNIntegrity(sg, topLevel);
 }
 
 template <typename G> void checkProteinsPtrIntegrity(G &g) {
@@ -60,6 +61,7 @@ template <typename G> void checkProteinsPtrIntegrity(G &g) {
 	size_t i = 0;
 	size_t o = 0;
 	bool topLevel = g.master == &g;
+	REQUIRE(topLevel == g.isMaster());
 	for (auto &p : g.actualProteins) {
 		REQUIRE(inVector(g.allProteinsPtr, {&p, true}));
 		if (topLevel) {
@@ -83,8 +85,10 @@ template <typename G> void checkProteinsPtrIntegrity(G &g) {
 		}
 	}
 	REQUIRE(g.allProteinsPtr.size() == s);
-	REQUIRE(g.inputProteins.size() == i);
-	REQUIRE(g.outputProteins.size() == o);
+	if (topLevel) {
+		REQUIRE(g.inputProteins.size() == i);
+		REQUIRE(g.outputProteins.size() == o);
+	}
 }
 
 template <typename T> MGRN<T> constructRandomMGRN() {
@@ -102,43 +106,51 @@ template <typename T> MGRN<T> constructRandomMGRN() {
 	checkMGRNIntegrity(mg0, &mg0);
 
 	auto mg1 = mg0;
-	REQUIRE(mg1.getParams().size() == mg1.getParams().size());
-	auto params0 = mg0.getParams();
-	auto params1 = mg1.getParams();
+	REQUIRE(mg1.params.size() == mg1.params.size());
+	auto params0 = mg0.params;
+	auto params1 = mg1.params;
 	for (size_t i = 0; i < params0.size(); ++i) {
 		REQUIRE(params0[i] == params1[i]);
 	}
 	REQUIRE(mg1.actualProteins.size() == mg0.actualProteins.size());
 	REQUIRE(mg1.subNets.size() == mg0.subNets.size());
-	CheckMGRNIntegrity(mg1, &mg1);
+	checkMGRNIntegrity(mg1, &mg1);
 	REQUIRE(mg1 == mg0);
 	mg0.addSubNet(mg1);
 	REQUIRE(mg1 != mg0);
 	REQUIRE(mg0.subNets.size() == 1);
 	REQUIRE(mg0.subNets[0] == mg1);
+	REQUIRE(mg0.subNets[0].parent == &mg0);
+	REQUIRE(mg0.getListOfAllGRNs().size() == 2);
+	REQUIRE(mg0.getListOfAllProteins().size() == 10);
 
 	auto p = Protein();
 	mg0.subNets[0].addProtein(p);
 	REQUIRE(mg0.subNets[0].actualProteins.size() == mg0.actualProteins.size() + 1u);
+	REQUIRE(mg0.subNets[0].subNets.size() == 0);
 	checkMGRNIntegrity(mg0, &mg0);
-
 	mg0.addRandomSubNet(1);  // add a random subnet with one protein
 	REQUIRE(mg0.subNets.size() == 2);
 	checkMGRNIntegrity(mg0, &mg0);
 	mg0.subNets[1].addRandomSubNet(15);
+	REQUIRE(mg0.subNets[1].subNets.size() == 1);
+	REQUIRE(mg0.subNets[1].subNets[0].actualProteins.size() == 15);
+	REQUIRE(mg0.subNets.size() == 2);
 	checkMGRNIntegrity(mg0, &mg0);
 	mg0.addRandomProtein(30);  // adding 30 completely random proteins
 	mg0.subNets[1].addRandomSubNet(5);
-	mg0.subNets[1].addRandomSubNet(0);
+	mg0.subNets[1].addRandomSubNet();
 	mg0.subNets[0].addRandomSubNet(3);
 	mg0.subNets[0].subNets[0].addRandomSubNet(12);
 	REQUIRE(mg0.subNets[1].subNets.size() == 3);
-	REQUIRE(mg0.subNets[0].subNets.size() == 2);
+	REQUIRE(mg0.subNets[0].subNets.size() == 1);
+	REQUIRE(mg0.subNets[0].subNets[0].subNets.size() == 1);
 	REQUIRE(mg0.subNets.size() == 2);
 	checkMGRNIntegrity(mg0, &mg0);
 	checkMGRNIntegrity(mg1, &mg1);  // mg1 should still be the same, unaffected
+
 	return mg0;
-};
+}
 
 template <typename T> void deterministicGRN() {
 	for (int n = 0; n < 100; ++n) {
@@ -161,71 +173,88 @@ template <typename T> void deterministicGRN() {
 }
 
 template <typename T> void testMGRN() {
-	// construction
 	auto mgrn = constructRandomMGRN<T>();
 
-	// deletion
-	size_t nbP = mgrn.getNbOwnProteins();
-	REQUIRE(nbP == mgrn.actualProteins.size());
-	size_t nbIn = mgrn.getNbOwnProteins(ProteinType::input);
-	size_t nbOut = mgrn.getNbOwnProteins(ProteinType::output);
-	size_t N = mgrn.getNbOwnProteins(ProteinType::regul) * 0.9;
-	for (size_t i = 0; i < N; ++i) mgrn.deleteRandomRegul();
-	checkMGRNIntegrity(mgrn, &mgrn);
-	REQUIRE(mgrn.getNbOwnProteins() == nbP - N);
-	REQUIRE(mgrn.getNbOwnProteins(ProteinType::input) == nbIn);
-	REQUIRE(mgrn.getNbOwnProteins(ProteinType::output) == nbOut);
-	REQUIRE(mgrn.getNbOwnProteins(ProteinType::regul) == nbP - nbIn - nbOut - N);
-	for (int i = 0; i < 500; ++i) mgrn.subNets[0].deleteRandomProtein();
-	checkMGRNIntegrity(mgrn, &mgrn);
-
-	// serialization / deserialization
-	auto jsonStr = mgrn.toJSON();
-	MGRN<T> mcopy(jsonStr);
-	checkMGRNIntegrity(mcopy);
-	REQUIRE(mcopy == mgrn);
-	auto copyStr = mcopy.toJSON();
-	REQUIRE(copyStr == jsonStr);
-
-	deterministicGRN<T>();
-
-	// mutation
-	auto otherCopy = mgrn;
-	REQUIRE(otherCopy == mgrn);
-	REQUIRE(MGRN<T>::relativeDistance(mgrn, otherCopy) == 0);
-	for (int i = 0; i < 200; ++i) {
-		auto tmp = mgrn;
-		mgrn.mutate();
-		double dist = MGRN<T>::relativeDistance(tmp, mgrn);
-		REQUIRE(dist > 0.0);
-		REQUIRE(dist < 1.0);
+	SECTION("deletion") {
+		std::cerr << "deletion" << std::endl;
+		size_t nbP = mgrn.getNbOwnProteins();
+		REQUIRE(nbP == mgrn.actualProteins.size());
+		size_t nbIn = mgrn.getNbOwnProteins(ProteinType::input);
+		size_t nbOut = mgrn.getNbOwnProteins(ProteinType::output);
+		size_t N =
+		    static_cast<size_t>(floor(mgrn.getNbOwnProteins(ProteinType::regul) * 0.9f));
+		for (size_t i = 0; i < N; ++i) mgrn.deleteRandomRegul();
+		checkMGRNIntegrity(mgrn, &mgrn);
+		REQUIRE(mgrn.getNbOwnProteins() == nbP - N);
+		REQUIRE(mgrn.getNbOwnProteins(ProteinType::input) == nbIn);
+		REQUIRE(mgrn.getNbOwnProteins(ProteinType::output) == nbOut);
+		REQUIRE(mgrn.getNbOwnProteins(ProteinType::regul) == nbP - nbIn - nbOut - N);
+		for (int i = 0; i < 500; ++i) mgrn.subNets[0].deleteRandomProtein();
+		checkMGRNIntegrity(mgrn, &mgrn);
 	}
-	REQUIRE(otherCopy != mgrn);
-	checkMGRNIntegrity(mgrn, &mgrn);
 
-	// crossover
-	int nbDifferentOffspring = 0;
-	int nbCrossovers = 150;
-	double avgDist0 = 0.0;
-	double avgDist1 = 0.0;
-	double avgDistDiff = 0.0;
-	for (int i = 0; i < nbCrossovers; ++i) {
-		auto offspring = MGRN<T>::crossover(otherCopy, mgrn);
-		checkMGRNIntegrity(offspring, &offspring);
-		double dist0 = MGRN<T>::relativeDistance(mgrn, offspring);
-		double dist1 = MGRN<T>::relativeDistance(otherCopy, offspring);
-		double distDiff = dist0 - dist1;
-		avgDist0 += dist0;
-		avgDist1 += dist1;
-		avgDistDiff += distDiff;
+	SECTION("serialization") {
+		std::cerr << "serialization" << std::endl;
+		auto jsonStr = mgrn.serialize();
+		MGRN<T> mcopy(jsonStr);
+		REQUIRE(mcopy == mgrn);
+		checkMGRNIntegrity(mcopy, &mcopy);
+		auto copyStr = mcopy.serialize();
+		REQUIRE(copyStr == jsonStr);
+		mcopy.setProteinConcentration("i0", ProteinType::input, 0.1234654567891253443456789);
+		REQUIRE(mcopy != mgrn);
+		MGRN<T> mcopy2(mcopy.serialize());
+		REQUIRE(mcopy2 == mcopy);
 	}
-	avgDist0 /= (double)nbCrossovers;
-	avgDist1 /= (double)nbCrossovers;
-	avgDistDiff /= (double)nbCrossovers;
-	REQUIRE(avgDist0 > 0);
-	REQUIRE(avgDist1 > 0);
-	REQUIRE(std::abs(avgDistDiff) < 0.05);
-	REQUIRE(nbDifferentOffspring > nbCrossovers * 0.5);
+
+	SECTION("deterministic") {
+		std::cerr << "determinism" << std::endl;
+		deterministicGRN<T>();
+	}
+
+	SECTION("mutation & crossover") {
+		std::cerr << "mutation" << std::endl;
+		auto otherCopy = mgrn;
+		REQUIRE(otherCopy == mgrn);
+		REQUIRE(MGRN<T>::relativeDistance(mgrn, otherCopy) == 0);
+		double avgD = 0;
+		double nbMuts = 200;
+		for (double i = 0; i < nbMuts; ++i) {
+			auto tmp = mgrn;
+			mgrn.mutate();
+			double dist = MGRN<T>::relativeDistance(tmp, mgrn);
+			avgD += dist;
+			REQUIRE(dist < 1.0);
+			checkMGRNIntegrity(mgrn, &mgrn);
+		}
+		avgD /= nbMuts;
+		REQUIRE(avgD > 0.0);
+		REQUIRE(avgD < 0.8);
+		REQUIRE(otherCopy != mgrn);
+		checkMGRNIntegrity(mgrn, &mgrn);
+
+		std::cerr << "crossover" << std::endl;
+		int nbCrossovers = 200;
+		double avgDist0 = 0.0;
+		double avgDist1 = 0.0;
+		double avgDistDiff = 0.0;
+		for (int i = 0; i < nbCrossovers; ++i) {
+			auto offspring = MGRN<T>::crossover(otherCopy, mgrn);
+			checkMGRNIntegrity(offspring, &offspring);
+			double dist0 = MGRN<T>::relativeDistance(mgrn, offspring);
+			double dist1 = MGRN<T>::relativeDistance(otherCopy, offspring);
+			double distDiff = dist0 - dist1;
+			avgDist0 += dist0;
+			avgDist1 += dist1;
+			avgDistDiff += distDiff;
+		}
+		avgDist0 /= (double)nbCrossovers;
+		avgDist1 /= (double)nbCrossovers;
+		avgDistDiff /= (double)nbCrossovers;
+		REQUIRE(avgDist0 > 0);
+		REQUIRE(avgDist1 > 0);
+		REQUIRE(std::abs(avgDistDiff) < 0.15);
+	}
 }
 
 TEST_CASE("MGRN declaration, init & serialization", "[mgrn]") { testMGRN<MGClassic>(); }

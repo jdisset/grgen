@@ -104,15 +104,15 @@ template <unsigned int nbCoords, typename CoordsType = double, int minCoord = 0,
 struct HiProtein {
 	using json = nlohmann::json;
 	using Base = Protein<nbCoords, CoordsType, minCoord, maxCoord>;
-	static constexpr CoordsType min_coord = minCoord;
-	static constexpr CoordsType max_coord = maxCoord;
-	bool input = false;
-	bool output = false;
-	bool modifiable = false;
+	static constexpr int min_coord = minCoord;
+	static constexpr int max_coord = maxCoord;
 	std::array<CoordsType, nbCoords>
 	    coords{};                       // proteins coords (id, enh, inh for example)
 	double c = INIT_CONCENTRATION;      // current concentration
 	double prevc = INIT_CONCENTRATION;  // previous concentration
+	bool input = false;
+	bool output = false;
+	bool modifiable = false;
 
 	bool operator==(const HiProtein &b) const {
 		for (size_t i = 0; i < nbCoords; ++i)
@@ -172,10 +172,14 @@ struct HiProtein {
 		o["M"] = modifiable;
 		return o;
 	}
+	void setConcentration(double con) {
+		prevc = c;
+		c = con;
+	}
 
 	void mutate() {
-		std::uniform_int_distribution<int> dInt(0, nbCoords + 2);
-		int mutated = dInt(grnRand);
+		std::uniform_int_distribution<size_t> dInt(0, nbCoords + 2);
+		size_t mutated = dInt(grnRand);
 		coords[mutated] = getRandomCoord();
 		if (modifiable) {
 			std::uniform_int_distribution<int> dBool(0, 1);
@@ -184,11 +188,20 @@ struct HiProtein {
 		}
 	}
 
+	void reset() {
+		c = INIT_CONCENTRATION;
+		prevc = c;
+	}
+
 	static constexpr double getMaxDistance() {
 		return sqrt(std::pow((maxCoord - minCoord), 2) * nbCoords);
 	}
 
-	double getDistanceWith(const HiProtein &p) {
+	static double relativeDistance(const HiProtein &a, const HiProtein &b) {
+		return a.getDistanceWith(b);
+	}
+
+	double getDistanceWith(const HiProtein &p) const {
 		double sum = 0;
 		for (size_t i = 0; i < nbCoords; ++i) {
 			sum += std::pow(
