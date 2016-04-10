@@ -104,8 +104,8 @@ template <unsigned int nbCoords, typename CoordsType = double, int minCoord = 0,
 struct HiProtein {
 	using json = nlohmann::json;
 	using Base = Protein<nbCoords, CoordsType, minCoord, maxCoord>;
-	static constexpr int min_coord = minCoord;
-	static constexpr int max_coord = maxCoord;
+	static constexpr int getMinCoord() { return minCoord; }
+	static constexpr int getMaxCoord() { return maxCoord; }
 	std::array<CoordsType, nbCoords>
 	    coords{};                       // proteins coords (id, enh, inh for example)
 	double c = INIT_CONCENTRATION;      // current concentration

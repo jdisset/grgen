@@ -34,17 +34,15 @@ template <typename K, typename T> bool inMap(std::map<K, T> m, T elem) {
 	return false;
 }
 
-template <typename P> void checkProteinLimits(P &p) {
-	for (auto &c : p.coords) {
-		REQUIRE(c <= P::max_coord);
-		REQUIRE(c >= P::min_coord);
-	}
-	REQUIRE(p.c >= 0);
-	REQUIRE(p.prevc >= 0);
-}
-
 template <typename G> void checkProteinsLimits(G &g) {
-	for (auto &p : g.actualProteins) checkProteinLimits(p);
+	for (auto &p : g.actualProteins) {
+		for (auto &c : p.coords) {
+			REQUIRE(c <= G::Protein::getMaxCoord());
+			REQUIRE(c >= G::Protein::getMinCoord());
+		}
+		REQUIRE(p.c >= 0);
+		REQUIRE(p.prevc >= 0);
+	}
 }
 
 template <typename G> void checkMGRNIntegrity(G &g, G *topLevel) {

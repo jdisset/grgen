@@ -72,13 +72,13 @@ template <typename Implem> struct MGRN {
 		master->updateSubNetsPtrsAndSignatures();
 	}
 
-	MGRN(const string& js) : MGRN(json::parse(js)) {
+	explicit MGRN(const string& js) : MGRN(json::parse(js)) {
 		master = this;
 		parent = nullptr;
 		master->updateSubNetsPtrsAndSignatures();
 	}
 
-	MGRN(const json& o) {
+	explicit MGRN(const json& o) {
 		assert(o.count("params"));
 		json par = o.at("params");
 		assert(par.size() == Implem::nbParams);
@@ -86,14 +86,14 @@ template <typename Implem> struct MGRN {
 		for (auto& p : par) params[i++] = p.get<double>();
 		assert(o.count("proteins"));
 		auto& pobj = o.at("proteins");
-		if (pobj.count("namedIn"))
+		if (pobj.count("namedIn") > 0)
 			inputProteins = pobj.at("namedIn").get<decltype(inputProteins)>();
-		if (pobj.count("namedOut"))
+		if (pobj.count("namedOut") > 0)
 			outputProteins = pobj.at("namedOut").get<decltype(outputProteins)>();
 		assert(pobj.count("plist"));
 		actualProteins.reserve(pobj.at("plist").size());
 		for (auto& p : pobj.at("plist")) actualProteins.push_back(Protein(p));
-		if (o.count("subnets"))
+		if (o.count("subnets") > 0)
 			for (auto& g : o.at("subnets")) subNets.push_back(MGRN(g));
 	}
 
@@ -244,8 +244,8 @@ template <typename Implem> struct MGRN {
 			}
 			aligned.push_back(
 			    tuple<size_t, size_t, double>(aId[best.first], bId[best.second], minDist));
-			aId.erase(std::begin(aId) + static_cast<long>(best.first));
-			bId.erase(std::begin(bId) + static_cast<long>(best.second));
+			aId.erase(std::begin(aId) + static_cast<int64_t>(best.first));
+			bId.erase(std::begin(bId) + static_cast<int64_t>(best.second));
 		}
 		return tuple<vector<tuple<size_t, size_t, double>>, vector<size_t>, vector<size_t>>(
 		    aligned, aId, bId);
@@ -254,7 +254,8 @@ template <typename Implem> struct MGRN {
 	static double relativeDistance(const MGRN& a, const MGRN& b) {
 		const double protVsGrn = 0.4;
 		// first we align proteins
-		// TODO : better distance between proteins (differences in the dynamics of the whole
+		// TODO(jean) : better distance between proteins (differences in the dynamics of the
+		// whole
 		// set, not just in the absolute coords of each individual protein)
 		// ==> just try with all possible id offsets and find the minimal distance
 		// => pass a lambda to getAligned so we can use custom distance methods
@@ -268,19 +269,17 @@ template <typename Implem> struct MGRN {
 		dProt += nbNotAligned;
 		double divisor = nbNotAligned + static_cast<double>(std::get<0>(alignedProts).size());
 		if (divisor > 0) dProt = dProt / divisor;
-		if (a.subNets.size() + b.subNets.size() == 0) {
-			return dProt;
-		} else {
-			double dG = 0.0;
-			auto alignedGrns = getAligned(a.subNets, b.subNets);
-			for (auto& al : std::get<0>(alignedGrns)) dG += std::get<2>(al);
-			double nbNotAlignedGrn = static_cast<double>(std::get<1>(alignedGrns).size() +
-			                                             std::get<2>(alignedGrns).size());
-			dG += nbNotAlignedGrn;
-			double divGrn = nbNotAlignedGrn + (double)std::get<0>(alignedGrns).size();
-			if (divGrn > 0) dG = dG / divGrn;
-			return protVsGrn * dProt + (1.0 - protVsGrn) * dG;
-		}
+		if (a.subNets.size() + b.subNets.size() == 0) return dProt;
+
+		double dG = 0.0;
+		auto alignedGrns = getAligned(a.subNets, b.subNets);
+		for (auto& al : std::get<0>(alignedGrns)) dG += std::get<2>(al);
+		double nbNotAlignedGrn = static_cast<double>(std::get<1>(alignedGrns).size() +
+		                                             std::get<2>(alignedGrns).size());
+		dG += nbNotAlignedGrn;
+		double divGrn = nbNotAlignedGrn + std::get<0>(alignedGrns).size();
+		if (divGrn > 0) dG = dG / divGrn;
+		return protVsGrn * dProt + (1.0 - protVsGrn) * dG;
 	}
 
 	size_t getNbProteins() { return actualProteins.size(); }
@@ -477,7 +476,7 @@ template <typename Implem> struct MGRN {
 				auto& p = actualProteins[i];
 				if ((p.input && p.output) || (!p.input && !p.output)) regulList.push_back(i);
 			}
-			if (regulList.size()) {
+			if (regulList.size() > 0) {
 				std::uniform_int_distribution<size_t> dp(0, regulList.size() - 1);
 				deleteProtein(regulList[dp(grnRand)]);
 			}
@@ -636,7 +635,7 @@ template <typename Implem> struct MGRN {
 
 	static MGRN<Implem> crossover(const MGRN<Implem>& g0, const MGRN<Implem>& g1) {
 		std::uniform_int_distribution<int> d(0, 1);
-		return d(grnRand) ? g0 : g1;
+		return d(grnRand) == 1 ? g0 : g1;
 	};
 };
 #endif
