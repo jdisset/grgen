@@ -20,6 +20,73 @@ template <typename G> void atLeastOneInputOneOutput(G &g) {
 	REQUIRE(o);
 }
 
+template <typename T, typename U> bool inSignature(T *p, U &sig) {
+	for (auto &s : sig)
+		if (p == s.first) return true;
+	return false;
+}
+
+template <typename T, typename U> auto getInfluencePool(T *p, U &g) {
+	for (auto &s : g.signatures)
+		if (p == s.first) return s.second;
+	return typename decltype(g.signatures)::value_type::second_type();
+}
+
+template <typename T> void checkSignatures(T &g) {
+	// signature should concern every updatable internal proteins
+	for (auto &p : g.actualProteins) {
+		if (!g.isMaster() || !p.input) {
+			// updatable protein
+			REQUIRE(inSignature(&p, g.signatures));
+			auto pool = getInfluencePool(&p, g);
+			if (p.input && !p.output && !g.isMaster()) {
+				// its a pure input (= an output of the parent sub)
+				// only influenced by parent
+				size_t psize = 0;
+				for (auto &p0 : g.parent->allProteinsPtr) {
+					if ((p0.first->input && p0.second) || (!p0.first->input && !p0.first->output) ||
+					    (p0.first->input && p0.first->output) || (p0.first->output && !p0.second)) {
+						REQUIRE(inSignature(p0.first, pool));
+						++psize;
+					}
+				}
+				REQUIRE(psize == pool.size());
+			}
+			if ((p.output && !p.input) || (!p.input && !p.output)) {
+				// only influenced by this level
+				size_t psize = 0;
+				for (auto &p0 : g.allProteinsPtr) {
+					if ((p0.first->input && p0.second) || (!p0.first->input && !p0.first->output) ||
+					    (p0.first->input && p0.first->output) || (p0.first->output && !p0.second)) {
+						REQUIRE(inSignature(p0.first, pool));
+						++psize;
+					}
+				}
+				REQUIRE(psize == pool.size());
+			}
+			if ((p.input && !g.isMaster() && p.output)) {
+				// influenced by both
+				size_t psize = 0;
+				for (auto &p0 : g.allProteinsPtr) {
+					if ((p0.first->input && p0.second) || (!p0.first->input && !p0.first->output) ||
+					    (p0.first->input && p0.first->output) || (p0.first->output && !p0.second)) {
+						REQUIRE(inSignature(p0.first, pool));
+						++psize;
+					}
+				}
+				for (auto &p0 : g.parent->allProteinsPtr) {
+					if ((p0.first->input && p0.second) || (!p0.first->input && !p0.first->output) ||
+					    (p0.first->input && p0.first->output) || (p0.first->output && !p0.second)) {
+						REQUIRE(inSignature(p0.first, pool));
+						++psize;
+					}
+				}
+				REQUIRE(psize == pool.size());
+			}
+		}
+	}
+}
+
 template <typename T> bool ptrInVector(std::vector<T> vec, T *adr) {
 	for (auto &e : vec)
 		if (&e == adr) return true;
@@ -51,6 +118,7 @@ template <typename G> void checkMGRNIntegrity(G &g, G *topLevel) {
 	atLeastOneInputOneOutput(g);
 	checkProteinsPtrIntegrity(g);
 	checkProteinsLimits(g);
+	checkSignatures(g);
 	for (auto &sg : g.subNets) checkMGRNIntegrity(sg, topLevel);
 }
 
@@ -172,6 +240,23 @@ template <typename T> void deterministicGRN() {
 
 template <typename T> void testMGRN() {
 	auto mgrn = constructRandomMGRN<T>();
+
+	SECTION("copy & move") {
+		std::cerr << "copy & move" << std::endl;
+		auto mgcopy = mgrn;
+		REQUIRE(mgrn.getListOfAllProteins().size() == mgcopy.getListOfAllProteins().size());
+		REQUIRE(mgcopy == mgrn);
+		MGRN<T> othercopy(mgrn);
+		REQUIRE(mgrn.getListOfAllProteins().size() ==
+		        othercopy.getListOfAllProteins().size());
+		REQUIRE(othercopy == mgrn);
+		vector<MGRN<T>> vec0 = {{mgrn, mgcopy}};
+		auto vec1 = vec0;
+		auto vec2 = vec0;
+		vec1.clear();
+		vec1 = vec2;
+		for (size_t i = 0; i < vec1.size(); ++i) REQUIRE(vec1[i] == vec0[i]);
+	}
 
 	SECTION("deletion") {
 		std::cerr << "deletion" << std::endl;

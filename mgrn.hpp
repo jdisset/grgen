@@ -17,6 +17,7 @@ using std::pair;
 using std::ostringstream;
 using std::tuple;
 template <typename Implem> struct MGRN {
+	// TODO(jean): more tests, especially on the dynamics
 	friend Implem;
 	using Protein = typename Implem::Protein_t;
 	using json = nlohmann::json;
@@ -39,23 +40,23 @@ template <typename Implem> struct MGRN {
 	// mutation & crossover params
 	// mutation
 	double MODIF_PROT_RATE = 10;
-	double ADD_PROT_RATE = 2;
-	double DEL_PROT_RATE = 2;
-	double ADD_GRN_RATE = 0.5;
-	double DEL_GRN_RATE = 0.5;
+	double ADD_PROT_RATE = 1;
+	double DEL_PROT_RATE = 1;
+	double ADD_GRN_RATE = 0.1;
+	double DEL_GRN_RATE = 0.05;
 	// crossover
 	double ALIGN_TRESHOLD = 0.5;
 	double APPEND_NON_ALIGNED = 0.2;
-	unsigned int MAX_REGULS = 40;
+	unsigned int MAX_REGULS = 20;
 
 	MGRN() : master(this), parent(nullptr) {}
-
 	MGRN& operator=(const MGRN& g) {
 		inputProteins = g.inputProteins;
 		outputProteins = g.outputProteins;
 		params = g.params;
 		actualProteins = g.actualProteins;
-		if (!master) master = this;
+		master = this;
+		parent = nullptr;
 		for (auto& sn : g.subNets) subNets.push_back(MGRN(sn));
 		master->updateSubNetsPtrsAndSignatures();
 		return *this;
@@ -114,6 +115,14 @@ template <typename Implem> struct MGRN {
 		if (t == ProteinType::input) return actualProteins[inputProteins.at(name)];
 		if (t == ProteinType::output) return actualProteins[outputProteins.at(name)];
 		throw std::invalid_argument("MGRN only has named input & output");
+	}
+
+	double getProteinConcentration(const string& name, ProteinType t) const {
+		if (master != this) throw std::invalid_argument("getProtein called on a subGRN");
+		if (t == ProteinType::input) return actualProteins[inputProteins.at(name)].c;
+		if (t == ProteinType::output) return actualProteins[outputProteins.at(name)].c;
+		throw std::invalid_argument("MGRN only has named input & output");
+		return 0.0;
 	}
 
 	/**************************************
@@ -298,6 +307,10 @@ template <typename Implem> struct MGRN {
 	/**************************************
 	 *          UPDATES
 	 *************************************/
+	bool influencesOthers(std::pair<Protein*, bool> p) {
+		return (!p.first->input && !p.first->output && p.second) ||
+		       (p.first->input && p.second) || (p.first->output);
+	}
 	void updateSignatures() {
 		/*
 		When step is called, a grn needs to update the concentration of every of its actual
@@ -308,28 +321,26 @@ template <typename Implem> struct MGRN {
 		thus tell which proteins should be updated and how.
 		*/
 		signatures.clear();
-		signatures.reserve(allProteinsPtr.size());
-		for (size_t i = 0; i < allProteinsPtr.size(); ++i) {
-			if (allProteinsPtr[i].second) {
-				auto& p = allProteinsPtr[i].first;
-				if (parent || !p->input) {
-					// same grn protein
-					// its influence pool is all of the input + reguls proteins of this grn
-					vector<std::pair<Protein*, InfluenceVec>> influencePool;
-					influencePool.reserve(allProteinsPtr.size());
-					for (size_t j = 0; j < firstOutputPtrIndex; ++j) {
-						auto& p1 = allProteinsPtr[j].first;
-						influencePool.push_back({p1, Implem::getInfluenceVec(p, p1, *this)});
+		for (auto& p : actualProteins) {
+			if (!isMaster() || !p.input) {
+				// p needs to be updated and thus needs an influence pool
+				std::vector<std::pair<Protein*, InfluenceVec>> inflPool;
+				// 1st case: it is influenced by the parent
+				if (!isMaster() && p.input)
+					for (auto& p1 : parent->allProteinsPtr) {
+						if (influencesOthers(p1))
+							inflPool.push_back(
+							    {p1.first, Implem::getInfluenceVec(&p, p1.first, *parent)});
 					}
-					if (parent && (p->input)) {
-						// p is also influenced by parent's proteins
-						for (size_t j = 0; j < parent->firstOutputPtrIndex; ++j) {
-							auto& p1 = parent->allProteinsPtr[j].first;
-							influencePool.push_back({p1, Implem::getInfluenceVec(p, p1, *parent)});
-						}
+				// 2nd: it is influenced by the current grn
+				if (p.output || (!p.input && !p.output)) {
+					for (auto& p1 : allProteinsPtr) {
+						if (influencesOthers(p1))
+							inflPool.push_back(
+							    {p1.first, Implem::getInfluenceVec(&p, p1.first, *this)});
 					}
-					signatures.push_back({p, influencePool});
 				}
+				signatures.push_back({&p, inflPool});
 			}
 		}
 	}
@@ -370,7 +381,12 @@ template <typename Implem> struct MGRN {
 
 	signature_t getSignatures() { return signatures; }
 
-	void step(unsigned int nbSteps = 1) { Implem::step(*this, nbSteps); }
+	void step(unsigned int nbSteps = 1) {
+		for (unsigned int i = 0; i < nbSteps; ++i) {
+			Implem::step(*this);
+			for (auto& g : subNets) g.step();
+		}
+	}
 
 	inline void reset() {
 		for (auto& p : actualProteins) p.reset();
@@ -382,12 +398,12 @@ template <typename Implem> struct MGRN {
 	}
 
 	void randomParams() {
-		array<pair<double, double>, Implem::nbParams> limits = Implem::paramsLimits();
+		auto limits = Implem::paramsLimits();
 		for (size_t i = 0; i < Implem::nbParams; ++i) {
 			std::uniform_real_distribution<double> distrib(limits[i].first, limits[i].second);
 			params[i] = distrib(grnRand);
 		}
-		updateSignatures();
+		master->updateSubNetsPtrsAndSignatures();
 	}
 
 	size_t pipedRoulette(const std::vector<double>& rawCoefs) {
@@ -423,7 +439,7 @@ template <typename Implem> struct MGRN {
 		master->updateSubNetsPtrsAndSignatures();
 	}
 
-	std::vector<MGRN<Implem>*> getListOfAllGRNs() {
+	std::vector<MGRN<Implem>*> getListOfAllGRNs() const {
 		// returns all GRNS present in the whole network
 		std::unordered_set<MGRN<Implem>*> visited;
 		std::vector<MGRN<Implem>*> toVisit;
@@ -441,7 +457,7 @@ template <typename Implem> struct MGRN {
 		return result;
 	}
 
-	std::vector<std::pair<MGRN<Implem>*, Protein*>> getListOfAllProteins() {
+	std::vector<std::pair<MGRN<Implem>*, Protein*>> getListOfAllProteins() const {
 		// returns all of the proteins present in the whole network
 		std::vector<std::pair<MGRN<Implem>*, Protein*>> result;
 		auto allGrns = getListOfAllGRNs();
