@@ -3,7 +3,7 @@
 #include "../mgrn.hpp"
 
 int main(int, char**) {
-	const int nbSteps = 1;
+	const int nbSteps = 500;
 	MGRN<MGClassic> grn;
 	grn.addRandomProtein(ProteinType::input, "Input 0");
 	grn.addRandomProtein(ProteinType::input, "Input 1");
@@ -14,7 +14,8 @@ int main(int, char**) {
 	for (int i = 0; i < nbSteps; ++i) {
 		grn.step();
 		std::cout << "{ \"GRN\":" << grn.serialize() << "}" << std::endl;
-		std::this_thread::sleep_for(0.4s);
+		std::this_thread::sleep_for(0.5s);
 	}
 	return 0;
 }
+

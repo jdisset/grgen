@@ -5,6 +5,7 @@ var io = require('socket.io-client');
 var Chart = require('chart.js');
 var $ = require('jquery-browserify');
 var res = 2;
+var rdmColor = require('randomColor');
 
 
 function range(start, end) {
@@ -14,23 +15,23 @@ function range(start, end) {
 	}
 	return foo;
 }
+
+var plotLines = {};
 var data = {
-	labels: range(0, 500),
-	datasets: [{
-		label: "Protein 1",
-		fill: false,
-		borderWidth: 1,
-		borderColor: "#A01",
-		backgroundColor: "#A01",
-		lineTension: 0.05,
-		pointRadius: 0,
-		data: range(0, 500).map(function(x) {
-			return (Math.sin(x / 10) * (1 - Math.random() * 0.5));
-		})
-	}]
+	labels: []
 };
+
+function getDataRange() {
+	var max = 0;
+	for (var key in plotLines)
+		if (plotLines.hasOwnProperty(key) && plotLines[key].values.length > max) max = plotLines[key].values.length;
+	return range(0, max - 1);
+}
+
+
 var options = {
 	maintainAspectRatio: false,
+	animation: false,
 	scales: {
 		xAxes: [{
 			ticks: {
@@ -85,6 +86,28 @@ var concentrationChart = new Chart(concentrationPlotCtx, {
 	options: options
 });
 
+function updatePlotData() {
+	data.labels = getDataRange();
+	data.datasets = [];
+	for (var key in plotLines) {
+		if (plotLines.hasOwnProperty(key)) {
+			var line = {
+				label: key,
+				fill: false,
+				borderWidth: 1,
+				borderColor: "#" + plotLines[key].color.toString(16),
+				backgroundColor: "#" + plotLines[key].color.toString(16),
+				lineTension: 0.0,
+				pointRadius: 0,
+				data: plotLines[key].values
+			};
+			data.datasets.push(line);
+		}
+	}
+	concentrationChart.update();
+}
+
+
 
 var PROT_SIZE = 30;
 var PROT_INNER_SIZE = 10;
@@ -93,7 +116,9 @@ var PROT_MIN_DIST = 150;
 var PROT_MAX_DIST = 400;
 var PROT_INPUT = new Victor(50, window.innerHeight / (2 * res));
 var PROT_OUTPUT = new Victor(window.innerWidth / res - 50, window.innerHeight / (2 * res));
-var SPRINGS_K = 15;
+var SPRINGS_K = 1;
+var SPRINGS_C = 0.15;
+var VISCO = 0.5;
 
 var grnscene = new PIXI.Container();
 grnscene.hitArea = new PIXI.Rectangle(0, 0, window.innerWidth, window.innerHeight);
@@ -107,6 +132,7 @@ function Protein(opt) {
 	//         Guts
 	// ---------------------
 	this.c = tools.declared(opt) && tools.declared(opt.c) ? opt.c : 0;
+	this.concentrationHistory = [this.c];
 	this.prevc = tools.declared(opt) && tools.declared(opt.prevc) ? opt.prevc : 0;
 	this.coords = tools.declared(opt) && tools.declared(opt.coords) ? opt.coords : [];
 	this.name = tools.declared(opt) && tools.declared(opt.name) ? opt.name : '';
@@ -123,7 +149,9 @@ function Protein(opt) {
 	this.selected = false;
 	this.dragged = false;
 
-	this.color = tools.declared(opt) && tools.declared(opt.color) ? opt.color : 0xE07020;
+	this.color = tools.declared(opt) && tools.declared(opt.color) ? opt.color : parseInt(rdmColor({
+		luminosity: 'light'
+	}).substr(1), 16);
 	this.circles = new PIXI.Graphics();
 	this.text = new PIXI.Text(this.name, {
 		font: '9px Helvetica',
@@ -140,19 +168,26 @@ function Protein(opt) {
 	// --------------------
 	//        Update
 	// --------------------
+	this.updateConcentration = function(newC) {
+		this.concentrationHistory.push(newC);
+		this.c = newC;
+	};
+
 	this.update = function(dt) {
 		if (!this.fixed && !this.dragged) {
 			oldVel = this.velocity;
-			this.force.subtract(oldVel.clone().multiplyScalar(0.7));
+			this.force.subtract(oldVel.clone().multiplyScalar(VISCO));
 			this.velocity.add(this.force.clone().multiplyScalar(dt));
 			this.position.add(this.velocity.clone().add(oldVel).multiplyScalar(dt * 0.5));
 		}
 		this.force = new Victor();
 
 		this.circles.clear();
-		if (this.selected || this.dragged)
+		if (this.selected)
+			this.circles.lineStyle(2, this.color); // (thickness, color)
+		if (this.dragged)
 			this.circles.lineStyle(2, 0xFFFFFF); // (thickness, color)
-		else
+		if (!this.selected && !this.dragged)
 			this.circles.lineStyle(0.7, 0x999999); // (thickness, color)
 		this.circles.drawCircle(this.position.x, this.position.y, PROT_SIZE); // (x,y,radius)
 		this.circles.lineStyle(0, 0x999999);
@@ -166,16 +201,32 @@ function Protein(opt) {
 		this.text.y = this.position.y - (this.text.height / 2);
 	};
 	this.interactive = true;
+	this.hasBeenDragged = false;
 	this.mousedown = function(event) {
 		this.dragged = true;
-		this.
+		this.hasBeenDragged = false;
 		event.stopPropagation();
 	};
 	this.mouseup = function(event) {
 		this.dragged = false;
+		if (!this.hasBeenDragged) {
+			this.selected = !this.selected;
+			if (this.selected) {
+				plotLines[this.name] = {
+					values: this.concentrationHistory,
+					color: this.color
+				};
+				updatePlotData();
+			} else {
+				delete plotLines[this.name];
+				updatePlotData();
+			}
+		}
+		this.hasBeenDragged = false;
 	};
 	this.mousemove = function(event) {
 		if (this.dragged) {
+			this.hasBeenDragged = true;
 			var p = event.data.getLocalPosition(grnscene);
 			this.x = p.x / 2;
 			this.y = p.y / 2;
@@ -219,7 +270,7 @@ function GRN(opt) {
 		this.springs = [];
 		for (var i = 0; i < this.proteins.length; ++i) {
 			for (var j = i + 1; j < this.proteins.length; ++j) {
-				this.springs.push(new Spring(this.proteins[i], this.proteins[j], tools.lerp(PROT_MIN_DIST, PROT_MAX_DIST, Math.abs(this.proteins[i].coords[0] - this.proteins[j].coords[0])), SPRINGS_K * 0.01, 0.3));
+				this.springs.push(new Spring(this.proteins[i], this.proteins[j], tools.lerp(PROT_MIN_DIST, PROT_MAX_DIST, Math.abs(this.proteins[i].coords[0] - this.proteins[j].coords[0])), SPRINGS_K, SPRINGS_C));
 			}
 		}
 		var nbI = 0;
@@ -246,8 +297,9 @@ function GRN(opt) {
 	};
 }
 
-GRN.prototype.updateFromFrame = function(fg) {
-	var indexToName = {};
+var indexToName = {};
+
+function refreshIndexToName() {
 	for (var index in fg.proteins.namedIn) {
 		if (fg.proteins.namedIn.hasOwnProperty(index)) {
 			indexToName[fg.proteins.namedIn[index]] = index;
@@ -258,6 +310,8 @@ GRN.prototype.updateFromFrame = function(fg) {
 			indexToName[fg.proteins.namedOut[index]] = index;
 		}
 	}
+}
+GRN.prototype.updateFromFrame = function(fg) {
 	if (fg.proteins.plist.length !== this.proteins.length) {
 		console.log("Creating protein array from scratch");
 		this.proteins = fg.proteins.plist.map(function(p, i) {
@@ -274,12 +328,13 @@ GRN.prototype.updateFromFrame = function(fg) {
 			grnscene.addChild(p);
 		});
 		this.recreateSprings();
+		refreshIndexToName();
 	} else {
 		this.proteins.forEach(function(p, i) {
 			if (!p.coords.equals(fg.proteins.plist[i].coords)) {
 				console.log("different coords");
 			}
-			p.c = fg.proteins.plist[i].c;
+			p.updateConcentration(fg.proteins.plist[i].c);
 			name = indexToName[i] !== undefined ? indexToName[i] : "Default " + i;
 		});
 	}
@@ -287,6 +342,8 @@ GRN.prototype.updateFromFrame = function(fg) {
 		console.log("different params");
 		this.params = fg.params;
 	}
+	data.labels = getDataRange();
+	concentrationChart.update();
 };
 
 

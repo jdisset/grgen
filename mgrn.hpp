@@ -17,7 +17,6 @@ using std::pair;
 using std::ostringstream;
 using std::tuple;
 template <typename Implem> struct MGRN {
-	// TODO(jean): more tests, especially on the dynamics
 	friend Implem;
 	using Protein = typename Implem::Protein_t;
 	using json = nlohmann::json;
@@ -308,8 +307,9 @@ template <typename Implem> struct MGRN {
 	 *          UPDATES
 	 *************************************/
 	bool influencesOthers(std::pair<Protein*, bool> p) {
-		return (!p.first->input && !p.first->output && p.second) ||
-		       (p.first->input && p.second) || (p.first->output);
+		return (!p.first->input && !p.first->output && p.second) ||  // regul
+		       (p.first->input && p.second) ||                       // input
+		       (p.first->output && !p.second);                       // child's output
 	}
 	void updateSignatures() {
 		/*
@@ -333,7 +333,7 @@ template <typename Implem> struct MGRN {
 							    {p1.first, Implem::getInfluenceVec(&p, p1.first, *parent)});
 					}
 				// 2nd: it is influenced by the current grn
-				if (p.output || (!p.input && !p.output)) {
+				if (p.output || (!p.input && !p.output)) {  // if output or regul
 					for (auto& p1 : allProteinsPtr) {
 						if (influencesOthers(p1))
 							inflPool.push_back(
@@ -345,6 +345,7 @@ template <typename Implem> struct MGRN {
 		}
 	}
 	void updateAllProteinsPtr() {
+		//allProteinsPtr contains all of the actual proteins + any extern protein that can influence them
 		allProteinsPtr.clear();
 		// we put inputs at the beginning
 		for (auto& g : subNets) {

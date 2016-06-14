@@ -30,7 +30,6 @@ var GRNFrames = [];
 io.on('connection', function(socket) {
 	console.log("new socket connection");
 	GRNFrames.forEach(function(f) {
-		console.log("sending frame");
 		socket.emit('GRNFrame', f);
 	});
 });
@@ -58,6 +57,7 @@ process.stdin.on('readable', function() {
 							data.frameId = GRNFrames.length;
 							GRNFrames.push(data.GRN);
 							io.sockets.emit('GRNFrame', data.GRN);
+							console.log("sending frame");
 						}
 					} catch (e) {
 						console.log('ERROR:' + e);

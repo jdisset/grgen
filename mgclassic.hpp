@@ -34,8 +34,9 @@ struct MGClassic {
 	template <typename GRN>
 	static InfluenceVec getInfluenceVec(Protein_t* p, Protein_t* p1, const GRN& grn) {
 		// how p is influenced by p1
-		return {{exp(grn.params[0] * (1.0 - abs(getId(*p) - getEnh(*p1)) - 1.0)),
-		         exp(grn.params[0] * (1.0 - abs(getId(*p) - getInh(*p1)) - 1.0))}};
+		InfluenceVec res{{exp(-grn.params[0] * abs(getId(*p) - getEnh(*p1))),
+		                  exp(-grn.params[0] * abs(getId(*p) - getInh(*p1)))}};
+		return res;
 	}
 
 	template <typename GRN> static void step(GRN& grn) {
