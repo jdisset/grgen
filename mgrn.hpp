@@ -56,19 +56,22 @@ template <typename Implem> struct MGRN {
 		actualProteins = g.actualProteins;
 		master = this;
 		parent = nullptr;
-		for (auto& sn : g.subNets) subNets.push_back(MGRN(sn));
-		master->updateSubNetsPtrsAndSignatures();
+		subNets.clear();
+		signatures.clear();
+		allProteinsPtr.clear();
+		for (auto& sn : g.subNets) subNets.push_back(MGRN(sn, master));
+		updateSubNetsPtrsAndSignatures();
 		return *this;
 	}
 
-	MGRN(const MGRN& grn)
+	MGRN(const MGRN& grn, MGRN* m = nullptr)
 	    : inputProteins(grn.inputProteins),
 	      outputProteins(grn.outputProteins),
 	      params(grn.params),
 	      actualProteins(grn.actualProteins),
-	      master(this),
+	      master(m ? m : this),
 	      parent(nullptr) {
-		for (auto& g : grn.subNets) subNets.push_back(MGRN(g));
+		for (auto& g : grn.subNets) subNets.push_back(MGRN(g, master));
 		master->updateSubNetsPtrsAndSignatures();
 	}
 
@@ -307,9 +310,17 @@ template <typename Implem> struct MGRN {
 	 *          UPDATES
 	 *************************************/
 	bool influencesOthers(std::pair<Protein*, bool> p) {
-		return (!p.first->input && !p.first->output && p.second) ||  // regul
-		       (p.first->input && p.second) ||                       // input
-		       (p.first->output && !p.second);                       // child's output
+		return (((!p.first->input && !p.first->output) ||
+		         (p.first->input && p.first->output)) &&
+		        p.second) ||                    // regul
+		       (p.first->input && p.second) ||  // input
+		       (p.first->output && !p.second);  // child's output
+	}
+	template <typename T, typename U>
+	bool isInVectorOfPair(const std::vector<std::pair<T, U>>& v, const T& t) {
+		for (auto& p : v)
+			if (t == p.first) return true;
+		return false;
 	}
 	void updateSignatures() {
 		/*
@@ -328,32 +339,36 @@ template <typename Implem> struct MGRN {
 				// 1st case: it is influenced by the parent
 				if (!isMaster() && p.input)
 					for (auto& p1 : parent->allProteinsPtr) {
-						if (influencesOthers(p1))
+						if (influencesOthers(p1) && !isInVectorOfPair(inflPool, p1.first))
 							inflPool.push_back(
-							    {p1.first, Implem::getInfluenceVec(&p, p1.first, *parent)});
+							    {p1.first, Implem::getInfluenceVec(&p, p1.first, *this)});
 					}
 				// 2nd: it is influenced by the current grn
 				if (p.output || (!p.input && !p.output)) {  // if output or regul
 					for (auto& p1 : allProteinsPtr) {
-						if (influencesOthers(p1))
+						if (influencesOthers(p1) && !isInVectorOfPair(inflPool, p1.first)) {
 							inflPool.push_back(
 							    {p1.first, Implem::getInfluenceVec(&p, p1.first, *this)});
+						}
 					}
 				}
 				signatures.push_back({&p, inflPool});
 			}
 		}
 	}
+
 	void updateAllProteinsPtr() {
-		//allProteinsPtr contains all of the actual proteins + any extern protein that can influence them
+		// allProteinsPtr contains all of the actual proteins + any other protein that can
+		// influence a protein at this level (using the params of this grn)
 		allProteinsPtr.clear();
 		// we put inputs at the beginning
 		for (auto& g : subNets) {
 			for (auto& p : g.actualProteins) {
 				// subs outputs are inputs for us
-				if (p.output && !p.input) allProteinsPtr.push_back({&p, false});
+				if (!p.input && p.output) allProteinsPtr.push_back({&p, false});
 			}
 		}
+		// inputs
 		for (auto& p : actualProteins)
 			if (p.input && !p.output) allProteinsPtr.push_back({&p, true});
 		firstRegulPtrIndex = allProteinsPtr.size();
@@ -423,6 +438,22 @@ template <typename Implem> struct MGRN {
 			sum += coefs[i];
 		}
 		return i;
+	}
+
+	template <typename K, typename T> bool inMap(std::map<K, T> m, T elem) {
+		for (auto& e : m)
+			if (e.second == elem) return true;
+		return false;
+	}
+
+	void enforceNamedInputsAndOutputs() {
+		for (size_t i = 0; i < actualProteins.size(); ++i) {
+			auto& p = actualProteins[i];
+			if (p.input && !inMap(inputProteins, i)) p.input = false;
+			if (p.output && !inMap(outputProteins, i)) p.output = false;
+		}
+		for (auto ip : inputProteins) actualProteins[ip.second].modifiable = false;
+		for (auto op : outputProteins) actualProteins[op.second].modifiable = false;
 	}
 
 	void enforceOneInputOneOutput() {
@@ -546,7 +577,10 @@ template <typename Implem> struct MGRN {
 				std::uniform_int_distribution<size_t> dice(0, allP.size() - 1);
 				size_t id = dice(grnRand);
 				allP[id].second->mutate();
-				if (!allP[id].first->isMaster()) allP[id].first->enforceOneInputOneOutput();
+				if (!allP[id].first->isMaster())
+					allP[id].first->enforceOneInputOneOutput();
+				else
+					allP[id].first->enforceNamedInputsAndOutputs();
 			} break;
 			case 1: {
 				// add prot
@@ -611,7 +645,9 @@ template <typename Implem> struct MGRN {
 					break;
 				}
 			}
-			if (!found) return false;
+			if (!found) {
+				return false;
+			}
 		}
 		for (auto& p0 : other.actualProteins) {
 			bool found = false;

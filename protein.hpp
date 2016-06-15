@@ -119,6 +119,7 @@ struct HiProtein {
 			if (coords[i] != b.coords[i]) return false;
 		if (input != b.input || output != b.output) return false;
 		return c == b.c;
+		// return true;
 	}
 
 	HiProtein(const decltype(coords) &co, double conc, bool i, bool o, bool m = true)

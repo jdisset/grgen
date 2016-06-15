@@ -1,5 +1,3 @@
-#include <algorithm>
-#include "../common.h"
 #include "../json/json.hpp"
 #include "../mgclassic.hpp"
 #include "../mgrn.hpp"
@@ -218,7 +216,59 @@ template <typename T> MGRN<T> constructRandomMGRN() {
 	return mg0;
 }
 
+template <typename T> std::string printSignatures(const T &g, unsigned int padd = 0) {
+	std::ostringstream o;
+	o << std::endl;
+	for (unsigned int i = 0; i < padd; ++i) o << " ";
+	o << "|-" << std::endl;
+	for (auto &s : g.signatures) {
+		for (unsigned int i = 0; i < padd; ++i) o << " ";
+		o << s.first << "[ ";
+		for (auto &s2 : s.second) {
+			o << "{" << s2.first << " -> " << s2.second[0] << "} ";
+		}
+		o << "]" << std::endl;
+	}
+	for (auto &s : g.subNets) o << printSignatures(s, padd + 2);
+	return o.str();
+}
+
 template <typename T> void deterministicGRN() {
+	for (int i = 0; i < 100; ++i) {
+		MGRN<T> g0;
+		g0.params = {{12.0, 1.0}};
+		g0.addProtein(ProteinType::input, "A", {{{0.69, 0.1, 0.2}}, 0.5, true, false, false});
+		g0.addProtein(ProteinType::output, "D", {{{0.1, 0.2, 0.3}}, 0.5, false, true, false});
+		MGRN<T> g1tmp;
+		g1tmp.params = {{7.0, 1.2}};
+		g1tmp.addProtein({{{0.7, 0.2, 0.33}}, 0.5, true, false, false});  // E
+		g1tmp.addProtein({{{0.9, 0.1, 0.65}}, 0.5, false, true, false});  // F
+		g0.addSubNet(g1tmp);
+		auto g1 = g0;
+		REQUIRE(g0.allProteinsPtr.size() == g1.allProteinsPtr.size());
+		REQUIRE(g0.subNets[0].allProteinsPtr.size() == g1.subNets[0].allProteinsPtr.size());
+		REQUIRE(g0.signatures.size() == g1.signatures.size());
+		for (size_t k = 0; k < g0.signatures.size(); ++k)
+			REQUIRE(g0.signatures[k].second.size() == g1.signatures[k].second.size());
+		for (size_t k = 0; k < g0.subNets[0].signatures.size(); ++k)
+			REQUIRE(g0.subNets[0].signatures[k].second.size() ==
+			        g1.subNets[0].signatures[k].second.size());
+		g0.reset();
+		g1.reset();
+		REQUIRE(g0 == g1);
+		g0.step(10);
+		g1.step(10);
+		INFO("G0 signatures = " << printSignatures(g0));
+		INFO("G1 signatures = " << printSignatures(g1));
+		REQUIRE(g0 == g1);
+		auto g2 = g1;
+		REQUIRE(g0 == g2);
+		g0.step(100);
+		g1.step(100);
+		g2.step(100);
+		REQUIRE(g0 == g1);
+		REQUIRE(g0 == g2);
+	}
 	for (int n = 0; n < 100; ++n) {
 		auto grn0 = constructRandomMGRN<T>();
 		auto grn1 = grn0;
@@ -227,6 +277,8 @@ template <typename T> void deterministicGRN() {
 		REQUIRE(grn0 == grn1);
 		grn0.step(10);
 		grn1.step(10);
+		INFO("grn0 =  " << grn0.serialize());
+		INFO("grn1 =  " << grn1.serialize());
 		REQUIRE(grn0 == grn1);
 		auto grn2 = grn1;
 		REQUIRE(grn0 == grn2);
@@ -242,10 +294,11 @@ template <typename T> void testMGRN() {
 	auto mgrn = constructRandomMGRN<T>();
 
 	SECTION("copy & move") {
-		// std::cerr << "copy & move" << std::endl;
+		INFO("copy & move");
 		auto mgcopy = mgrn;
 		REQUIRE(mgrn.getListOfAllProteins().size() == mgcopy.getListOfAllProteins().size());
 		REQUIRE(mgcopy == mgrn);
+		// same signatures as well
 		MGRN<T> othercopy(mgrn);
 		REQUIRE(mgrn.getListOfAllProteins().size() ==
 		        othercopy.getListOfAllProteins().size());
@@ -259,7 +312,7 @@ template <typename T> void testMGRN() {
 	}
 
 	SECTION("deletion") {
-		// std::cerr << "deletion" << std::endl;
+		INFO("deletion");
 		size_t nbP = mgrn.getNbOwnProteins();
 		REQUIRE(nbP == mgrn.actualProteins.size());
 		size_t nbIn = mgrn.getNbOwnProteins(ProteinType::input);
@@ -277,7 +330,7 @@ template <typename T> void testMGRN() {
 	}
 
 	SECTION("serialization") {
-		// std::cerr << "serialization" << std::endl;
+		INFO("serialization");
 		auto jsonStr = mgrn.serialize();
 		MGRN<T> mcopy(jsonStr);
 		REQUIRE(mcopy == mgrn);
@@ -291,25 +344,25 @@ template <typename T> void testMGRN() {
 	}
 
 	SECTION("deterministic") {
-		// std::cerr << "determinism" << std::endl;
-		// deterministicGRN<T>();
+		INFO("determinism");
+		deterministicGRN<T>();
 	}
 
 	SECTION("mutation & crossover") {
-		// std::cerr << "mutation" << std::endl;
-		// auto otherCopy = mgrn;
-		// REQUIRE(otherCopy == mgrn);
-		// REQUIRE(MGRN<T>::relativeDistance(mgrn, otherCopy) == 0);
-		// double avgD = 0;
-		// double nbMuts = 200;
-		// for (double i = 0; i < nbMuts; ++i) {
-		// auto tmp = mgrn;
-		// mgrn.mutate();
-		// double dist = MGRN<T>::relativeDistance(tmp, mgrn);
-		// avgD += dist;
-		// REQUIRE(dist < 1.0);
-		// checkMGRNIntegrity(mgrn, &mgrn);
-		//}
+		INFO("mutation")
+		auto otherCopy = mgrn;
+		REQUIRE(otherCopy == mgrn);
+		REQUIRE(MGRN<T>::relativeDistance(mgrn, otherCopy) == 0);
+		double avgD = 0;
+		double nbMuts = 200;
+		for (double i = 0; i < nbMuts; ++i) {
+			auto tmp = mgrn;
+			mgrn.mutate();
+			double dist = MGRN<T>::relativeDistance(tmp, mgrn);
+			avgD += dist;
+			REQUIRE(dist < 1.0);
+			checkMGRNIntegrity(mgrn, &mgrn);
+		}
 		// avgD /= nbMuts;
 		// REQUIRE(avgD > 0.0);
 		// REQUIRE(avgD < 0.8);
@@ -341,7 +394,7 @@ template <typename T> void testMGRN() {
 }
 
 TEST_CASE("MGRN random declaration, init & serialization", "[mgrn]") {
-	for (int i = 0; i < 0; ++i) testMGRN<MGClassic>();
+	for (int i = 0; i < 50; ++i) testMGRN<MGClassic>();
 }
 
 template <typename P, typename G>
@@ -411,7 +464,6 @@ template <typename T> void scenario1() {
 	REQUIRE(g3.master == &g0);
 
 	// signatures
-	const double eps = 0.000001;
 
 	REQUIRE(g0.signatures.size() == 3);
 
@@ -425,28 +477,26 @@ template <typename T> void scenario1() {
 	auto *H = &g2.actualProteins[0];
 	auto *I = &g3.actualProteins[0];
 
-	std::cerr << "A = " << A->toJSON().dump() << std::endl;
-	std::cerr << "B = " << B->toJSON().dump() << std::endl;
-	std::cerr << "C = " << C->toJSON().dump() << std::endl;
-	std::cerr << "D = " << D->toJSON().dump() << std::endl;
-	std::cerr << "E = " << E->toJSON().dump() << std::endl;
-	std::cerr << "F = " << F->toJSON().dump() << std::endl;
-	std::cerr << "G = " << G->toJSON().dump() << std::endl;
-	std::cerr << "H = " << H->toJSON().dump() << std::endl;
-	std::cerr << "I = " << I->toJSON().dump() << std::endl;
+	INFO("A = " << A->toJSON().dump());
+	INFO("B = " << B->toJSON().dump());
+	INFO("C = " << C->toJSON().dump());
+	INFO("D = " << D->toJSON().dump());
+	INFO("E = " << E->toJSON().dump());
+	INFO("F = " << F->toJSON().dump());
+	INFO("G = " << G->toJSON().dump());
+	INFO("H = " << H->toJSON().dump());
+	INFO("I = " << I->toJSON().dump());
 
 	auto sA = getInfluencesTo(A, g0);
 	auto sB = getInfluencesTo(B, g0);
 	auto sC = getInfluencesTo(C, g0);
 	auto sD = getInfluencesTo(D, g0);
-	auto sE = getInfluencesTo(E, g0);
-	auto sF = getInfluencesTo(F, g0);
-	auto sG = getInfluencesTo(G, g0);
-	auto sH = getInfluencesTo(H, g0);
-	auto sI = getInfluencesTo(I, g0);
+	auto sE = getInfluencesTo(E, g1);
+	auto sF = getInfluencesTo(F, g1);
+	auto sG = getInfluencesTo(G, g1);
+	auto sH = getInfluencesTo(H, g2);
+	auto sI = getInfluencesTo(I, g3);
 
-	std::cerr << "sB = " << std::endl;
-	printInfluences(sB);
 	REQUIRE(sA.size() == 0);
 	REQUIRE(sB.size() == 4);
 	REQUIRE(sC.size() == 4);
@@ -454,9 +504,118 @@ template <typename T> void scenario1() {
 	REQUIRE(sE.size() == 3);
 	REQUIRE(sF.size() == 4);
 	REQUIRE(sG.size() == 4);
-	REQUIRE(sH.size() == 3);
+	REQUIRE(sH.size() == 4);
+	REQUIRE(sI.size() == 4);
 
-	// REQUIRE(sBA.second[3] == Approx(0.548811636094027).epsilon(eps));
+	auto sBA = getSignature(B, A, g0);
+	REQUIRE(sBA.first);
+	auto sBB = getSignature(B, B, g0);
+	REQUIRE(sBB.first);
+	auto sBC = getSignature(B, C, g0);
+	REQUIRE(sBC.first);
+	auto sBF = getSignature(B, F, g0);
+	REQUIRE(sBF.first);
+
+	auto sCA = getSignature(C, A, g0);
+	REQUIRE(sCA.first);
+	auto sCB = getSignature(C, B, g0);
+	REQUIRE(sCB.first);
+	auto sCC = getSignature(C, C, g0);
+	REQUIRE(sCC.first);
+	auto sCF = getSignature(C, F, g0);
+	REQUIRE(sCF.first);
+
+	auto sDA = getSignature(D, A, g0);
+	REQUIRE(sDA.first);
+	auto sDB = getSignature(D, B, g0);
+	REQUIRE(sDB.first);
+	auto sDC = getSignature(D, C, g0);
+	REQUIRE(sDC.first);
+	auto sDF = getSignature(D, F, g0);
+	REQUIRE(sDF.first);
+
+	auto sEA = getSignature(E, A, g1);
+	REQUIRE(sEA.first);
+	auto sEB = getSignature(E, B, g1);
+	REQUIRE(sEB.first);
+	auto sEC = getSignature(E, C, g1);
+	REQUIRE(sEC.first);
+
+	auto sFE = getSignature(F, E, g1);
+	REQUIRE(sFE.first);
+	auto sFG = getSignature(F, G, g1);
+	REQUIRE(sFG.first);
+	auto sFH = getSignature(F, H, g1);
+	REQUIRE(sFH.first);
+	auto sFI = getSignature(F, I, g1);
+	REQUIRE(sFI.first);
+
+	auto sGE = getSignature(G, E, g1);
+	REQUIRE(sGE.first);
+	auto sGG = getSignature(G, G, g1);
+	REQUIRE(sGG.first);
+	auto sGH = getSignature(G, H, g1);
+	REQUIRE(sGH.first);
+	auto sGI = getSignature(G, I, g1);
+	REQUIRE(sGI.first);
+
+	auto sHE = getSignature(H, E, g2);
+	REQUIRE(sHE.first);
+	auto sHG = getSignature(H, G, g2);
+	REQUIRE(sHG.first);
+	auto sHH = getSignature(H, H, g2);
+	REQUIRE(sHH.first);
+	auto sHI = getSignature(H, I, g2);
+	REQUIRE(sHI.first);
+
+	auto sIE = getSignature(I, E, g3);
+	REQUIRE(sIE.first);
+	auto sIG = getSignature(I, G, g3);
+	REQUIRE(sIG.first);
+	auto sIH = getSignature(I, H, g3);
+	REQUIRE(sIH.first);
+	auto sII = getSignature(I, I, g3);
+	REQUIRE(sII.first);
+
+	const double eps = 1e-12;
+	REQUIRE(sBA.second[0] == Approx(0.548811636094027).epsilon(eps));
+	REQUIRE(sBB.second[0] == Approx(0.000409734978979786).epsilon(eps));
+	REQUIRE(sBC.second[0] == Approx(0.0149955768204777).epsilon(eps));
+	REQUIRE(sBF.second[0] == Approx(0.548811636094027).epsilon(eps));
+
+	REQUIRE(sCA.second[0] == Approx(0.00822974704902002).epsilon(eps));
+	REQUIRE(sCB.second[0] == Approx(0.0273237224472925).epsilon(eps));
+	REQUIRE(sCC.second[0] == Approx(1).epsilon(eps));
+	REQUIRE(sCF.second[0] == Approx(0.00822974704902002).epsilon(eps));
+
+	REQUIRE(sDA.second[0] == Approx(1).epsilon(eps));
+	REQUIRE(sDB.second[0] == Approx(0.000224867324178848).epsilon(eps));
+	REQUIRE(sDC.second[0] == Approx(0.00822974704902002).epsilon(eps));
+	REQUIRE(sDF.second[0] == Approx(1).epsilon(eps));
+
+	REQUIRE(sEA.second[0] == Approx(0.0149955768204777).epsilon(eps));
+	REQUIRE(sEB.second[0] == Approx(0.496585303791409).epsilon(eps));
+	REQUIRE(sEC.second[0] == Approx(0.246596963941607).epsilon(eps));
+
+	REQUIRE(sFE.second[0] == Approx(0.00744658307092434).epsilon(eps));
+	REQUIRE(sFG.second[0] == Approx(0.00425355574481513).epsilon(eps));
+	REQUIRE(sFH.second[0] == Approx(0.704688089718714).epsilon(eps));
+	REQUIRE(sFI.second[0] == Approx(0.810584245970187).epsilon(eps));
+
+	REQUIRE(sGE.second[0] == Approx(0.0212797364383772).epsilon(eps));
+	REQUIRE(sGG.second[0] == Approx(0.0121551783299149).epsilon(eps));
+	REQUIRE(sGH.second[0] == Approx(0.246596963941607).epsilon(eps));
+	REQUIRE(sGI.second[0] == Approx(0.43171052342908).epsilon(eps));
+
+	REQUIRE(sHE.second[0] == Approx(0.0301973834223185).epsilon(eps));
+	REQUIRE(sHG.second[0] == Approx(0.0111089965382423).epsilon(eps));
+	REQUIRE(sHH.second[0] == Approx(0.00280879419452551).epsilon(eps));
+	REQUIRE(sHI.second[0] == Approx(0.00763509421885996).epsilon(eps));
+
+	REQUIRE(sIE.second[0] == Approx(0.149568619222635).epsilon(eps));
+	REQUIRE(sIG.second[0] == Approx(0.683861409212356).epsilon(eps));
+	REQUIRE(sIH.second[0] == Approx(0.000000096859922509254).epsilon(eps));
+	REQUIRE(sII.second[0] == Approx(0.000000442865378096327).epsilon(eps));
 }
 
 TEST_CASE("Scenarios", "[mgrn]") { scenario1<MGClassic>(); }
