@@ -112,14 +112,13 @@ struct HiProtein {
 	double prevc = INIT_CONCENTRATION;  // previous concentration
 	bool input = false;
 	bool output = false;
-	bool modifiable = false;
+	bool modifiable = true;
 
 	bool operator==(const HiProtein &b) const {
 		for (size_t i = 0; i < nbCoords; ++i)
 			if (coords[i] != b.coords[i]) return false;
 		if (input != b.input || output != b.output) return false;
-		return c == b.c;
-		// return true;
+		return b.modifiable == modifiable && c == b.c;
 	}
 
 	HiProtein(const decltype(coords) &co, double conc, bool i, bool o, bool m = true)
@@ -173,19 +172,22 @@ struct HiProtein {
 		o["M"] = modifiable;
 		return o;
 	}
+
 	void setConcentration(double con) {
 		prevc = c;
 		c = con;
 	}
 
 	void mutate() {
-		std::uniform_int_distribution<size_t> dInt(0, nbCoords + 2);
+		std::uniform_int_distribution<size_t> dInt(0, nbCoords);
 		size_t mutated = dInt(grnRand);
 		coords[mutated] = getRandomCoord();
 		if (modifiable) {
 			std::uniform_int_distribution<int> dBool(0, 1);
-			input = dBool(grnRand);
-			output = dBool(grnRand);
+			if (dBool(grnRand)) {
+				input = dBool(grnRand);
+				output = dBool(grnRand);
+			}
 		}
 	}
 

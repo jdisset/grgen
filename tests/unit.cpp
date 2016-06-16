@@ -1,4 +1,5 @@
 #define CATCH_CONFIG_MAIN
+#define CATCH_CONFIG_CONSOLE_WIDTH 80
 #include "../classic.hpp"
 #include "../common.h"
 #include "../grn.hpp"

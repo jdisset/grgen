@@ -158,6 +158,7 @@ template <typename Implem> struct MGRN {
 	 *************************************/
 	size_t addProtein(const Protein& p) {
 		actualProteins.push_back(p);
+		if (isMaster() && (p.input || p.output)) actualProteins.back().modifiable = false;
 		master->updateSubNetsPtrsAndSignatures();
 		return actualProteins.size() - 1;
 	}
@@ -195,7 +196,6 @@ template <typename Implem> struct MGRN {
 				p.input = false;
 				p.output = false;
 			}
-			if (isMaster()) p.modifiable = false;
 			addProtein(p);
 		}
 	}
@@ -449,11 +449,15 @@ template <typename Implem> struct MGRN {
 	void enforceNamedInputsAndOutputs() {
 		for (size_t i = 0; i < actualProteins.size(); ++i) {
 			auto& p = actualProteins[i];
-			if (p.input && !inMap(inputProteins, i)) p.input = false;
-			if (p.output && !inMap(outputProteins, i)) p.output = false;
+			if (!inMap(inputProteins, i)) p.input = false;
+			if (!inMap(outputProteins, i)) p.output = false;
 		}
-		for (auto ip : inputProteins) actualProteins[ip.second].modifiable = false;
-		for (auto op : outputProteins) actualProteins[op.second].modifiable = false;
+		for (auto ip : inputProteins) {
+			actualProteins[ip.second].modifiable = false;
+		}
+		for (auto op : outputProteins) {
+			actualProteins[op.second].modifiable = false;
+		}
 	}
 
 	void enforceOneInputOneOutput() {
@@ -485,7 +489,7 @@ template <typename Implem> struct MGRN {
 		}
 		std::vector<MGRN<Implem>*> result;
 		result.reserve(visited.size());
-		for (auto& g : visited) result.push_back(g);
+		for (auto g : visited) result.push_back(g);
 		return result;
 	}
 
@@ -493,8 +497,11 @@ template <typename Implem> struct MGRN {
 		// returns all of the proteins present in the whole network
 		std::vector<std::pair<MGRN<Implem>*, Protein*>> result;
 		auto allGrns = getListOfAllGRNs();
-		for (auto& g : allGrns)
-			for (auto& p : g->actualProteins) result.push_back({g, &p});
+		for (auto g : allGrns) {
+			for (size_t i = 0; i < g->actualProteins.size(); ++i) {
+				result.push_back({g, &g->actualProteins[i]});
+			}
+		}
 		return result;
 	}
 
@@ -567,7 +574,7 @@ template <typename Implem> struct MGRN {
 	 *       MUTATION & CROSSOVER
 	 *************************************/
 
-	void mutate() {
+	size_t mutate() {
 		size_t operation = pipedRoulette(
 		    {{MODIF_PROT_RATE, ADD_PROT_RATE, DEL_PROT_RATE, ADD_GRN_RATE, DEL_GRN_RATE}});
 		switch (operation) {
@@ -577,10 +584,8 @@ template <typename Implem> struct MGRN {
 				std::uniform_int_distribution<size_t> dice(0, allP.size() - 1);
 				size_t id = dice(grnRand);
 				allP[id].second->mutate();
-				if (!allP[id].first->isMaster())
-					allP[id].first->enforceOneInputOneOutput();
-				else
-					allP[id].first->enforceNamedInputsAndOutputs();
+				allP[id].first->enforceOneInputOneOutput();
+				if (allP[id].first->isMaster()) allP[id].first->enforceNamedInputsAndOutputs();
 			} break;
 			case 1: {
 				// add prot
@@ -626,6 +631,7 @@ template <typename Implem> struct MGRN {
 				}
 			} break;
 		}
+		return operation;
 	}
 
 	bool operator!=(const MGRN<Implem>& other) const { return !(*this == other); }

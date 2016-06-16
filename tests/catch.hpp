@@ -295,6 +295,7 @@
 #define CATCH_AUTO_PTR(T) std::auto_ptr<T>
 #endif
 
+#define OUT_BUF_SIZE 100000
 namespace Catch {
 
 struct IConfig;
@@ -3563,7 +3564,7 @@ class Text {
 		std::string remainder = _str;
 
 		while (!remainder.empty()) {
-			if (lines.size() >= 1000) {
+			if (lines.size() >= OUT_BUF_SIZE) {
 				lines.push_back("... message truncated due to excessive size");
 				return;
 			}
@@ -4534,7 +4535,7 @@ class Text {
 		std::string remainder = _str;
 
 		while (!remainder.empty()) {
-			if (lines.size() >= 1000) {
+			if (lines.size() >= OUT_BUF_SIZE) {
 				lines.push_back("... message truncated due to excessive size");
 				return;
 			}

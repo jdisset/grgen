@@ -110,12 +110,35 @@ template <typename G> void checkProteinsLimits(G &g) {
 	}
 }
 
+template <typename G> void checkInOutProteins(G &g) {
+	// check inputs & outputs
+	if (g.isMaster()) {
+		REQUIRE(g.inputProteins.size() > 0);
+		REQUIRE(g.outputProteins.size() > 0);
+	} else {
+		REQUIRE(g.inputProteins.size() == 0);
+		REQUIRE(g.outputProteins.size() == 0);
+	}
+	for (auto &i : g.inputProteins) {
+		REQUIRE(g.actualProteins.size() > i.second);
+		REQUIRE(!g.actualProteins[i.second].modifiable);
+		REQUIRE(g.actualProteins[i.second].input);
+	}
+	for (auto &i : g.outputProteins) {
+		REQUIRE(g.actualProteins.size() > i.second);
+		REQUIRE(!g.actualProteins[i.second].modifiable);
+		REQUIRE(g.actualProteins[i.second].output);
+	}
+}
+
 template <typename G> void checkMGRNIntegrity(G &g, G *topLevel) {
 	REQUIRE(g.master == topLevel);
 	for (auto &sg : g.subNets) REQUIRE(sg.parent == &g);
 	atLeastOneInputOneOutput(g);
+	checkInOutProteins(g);
 	checkProteinsPtrIntegrity(g);
 	checkProteinsLimits(g);
+
 	// checkSignatures(g);
 	for (auto &sg : g.subNets) checkMGRNIntegrity(sg, topLevel);
 }
@@ -234,41 +257,6 @@ template <typename T> std::string printSignatures(const T &g, unsigned int padd 
 }
 
 template <typename T> void deterministicGRN() {
-	for (int i = 0; i < 100; ++i) {
-		MGRN<T> g0;
-		g0.params = {{12.0, 1.0}};
-		g0.addProtein(ProteinType::input, "A", {{{0.69, 0.1, 0.2}}, 0.5, true, false, false});
-		g0.addProtein(ProteinType::output, "D", {{{0.1, 0.2, 0.3}}, 0.5, false, true, false});
-		MGRN<T> g1tmp;
-		g1tmp.params = {{7.0, 1.2}};
-		g1tmp.addProtein({{{0.7, 0.2, 0.33}}, 0.5, true, false, false});  // E
-		g1tmp.addProtein({{{0.9, 0.1, 0.65}}, 0.5, false, true, false});  // F
-		g0.addSubNet(g1tmp);
-		auto g1 = g0;
-		REQUIRE(g0.allProteinsPtr.size() == g1.allProteinsPtr.size());
-		REQUIRE(g0.subNets[0].allProteinsPtr.size() == g1.subNets[0].allProteinsPtr.size());
-		REQUIRE(g0.signatures.size() == g1.signatures.size());
-		for (size_t k = 0; k < g0.signatures.size(); ++k)
-			REQUIRE(g0.signatures[k].second.size() == g1.signatures[k].second.size());
-		for (size_t k = 0; k < g0.subNets[0].signatures.size(); ++k)
-			REQUIRE(g0.subNets[0].signatures[k].second.size() ==
-			        g1.subNets[0].signatures[k].second.size());
-		g0.reset();
-		g1.reset();
-		REQUIRE(g0 == g1);
-		g0.step(10);
-		g1.step(10);
-		INFO("G0 signatures = " << printSignatures(g0));
-		INFO("G1 signatures = " << printSignatures(g1));
-		REQUIRE(g0 == g1);
-		auto g2 = g1;
-		REQUIRE(g0 == g2);
-		g0.step(100);
-		g1.step(100);
-		g2.step(100);
-		REQUIRE(g0 == g1);
-		REQUIRE(g0 == g2);
-	}
 	for (int n = 0; n < 100; ++n) {
 		auto grn0 = constructRandomMGRN<T>();
 		auto grn1 = grn0;
@@ -349,59 +337,56 @@ template <typename T> void testMGRN() {
 	}
 
 	SECTION("mutation & crossover") {
-		INFO("mutation")
+		INFO("mutation");
 		auto otherCopy = mgrn;
 		REQUIRE(otherCopy == mgrn);
 		REQUIRE(MGRN<T>::relativeDistance(mgrn, otherCopy) == 0);
 		double avgD = 0;
-		double nbMuts = 200;
+		double nbMuts = 300;
 		for (double i = 0; i < nbMuts; ++i) {
 			auto tmp = mgrn;
-			mgrn.mutate();
+			auto mut = mgrn.mutate();
+			INFO("mutation type : " << mut);
 			double dist = MGRN<T>::relativeDistance(tmp, mgrn);
 			avgD += dist;
 			REQUIRE(dist < 1.0);
 			checkMGRNIntegrity(mgrn, &mgrn);
 		}
-		// avgD /= nbMuts;
-		// REQUIRE(avgD > 0.0);
-		// REQUIRE(avgD < 0.8);
-		// REQUIRE(otherCopy != mgrn);
-		// checkMGRNIntegrity(mgrn, &mgrn);
+		avgD /= nbMuts;
+		REQUIRE(avgD > 0.0);
+		REQUIRE(avgD < 0.8);
+		REQUIRE(otherCopy != mgrn);
+		checkMGRNIntegrity(mgrn, &mgrn);
 
-		//// std::cerr << "crossover" << std::endl;
-		// int nbCrossovers = 200;
-		// double avgDist0 = 0.0;
-		// double avgDist1 = 0.0;
-		// double avgDistDiff = 0.0;
-		// for (int i = 0; i < nbCrossovers; ++i) {
-		// auto offspring = MGRN<T>::crossover(otherCopy, mgrn);
-		// checkMGRNIntegrity(offspring, &offspring);
-		// double dist0 = MGRN<T>::relativeDistance(mgrn, offspring);
-		// double dist1 = MGRN<T>::relativeDistance(otherCopy, offspring);
-		// double distDiff = dist0 - dist1;
-		// avgDist0 += dist0;
-		// avgDist1 += dist1;
-		// avgDistDiff += distDiff;
-		//}
-		// avgDist0 /= (double)nbCrossovers;
-		// avgDist1 /= (double)nbCrossovers;
-		// avgDistDiff /= (double)nbCrossovers;
-		// REQUIRE(avgDist0 > 0);
-		// REQUIRE(avgDist1 > 0);
-		// REQUIRE(std::abs(avgDistDiff) < 0.15);
+		INFO("crossover");
+		int nbCrossovers = 300;
+		double avgDist0 = 0.0;
+		double avgDist1 = 0.0;
+		double avgDistDiff = 0.0;
+		for (int i = 0; i < nbCrossovers; ++i) {
+			auto offspring = MGRN<T>::crossover(otherCopy, mgrn);
+			checkMGRNIntegrity(offspring, &offspring);
+			double dist0 = MGRN<T>::relativeDistance(mgrn, offspring);
+			double dist1 = MGRN<T>::relativeDistance(otherCopy, offspring);
+			double distDiff = dist0 - dist1;
+			avgDist0 += dist0;
+			avgDist1 += dist1;
+			avgDistDiff += distDiff;
+		}
+		avgDist0 /= (double)nbCrossovers;
+		avgDist1 /= (double)nbCrossovers;
+		avgDistDiff /= (double)nbCrossovers;
+		REQUIRE(avgDist0 > 0);
+		REQUIRE(avgDist1 > 0);
+		REQUIRE(std::abs(avgDistDiff) < 0.15);
 	}
-}
-
-TEST_CASE("MGRN random declaration, init & serialization", "[mgrn]") {
-	for (int i = 0; i < 50; ++i) testMGRN<MGClassic>();
 }
 
 template <typename P, typename G>
 std::pair<bool, typename G::InfluenceVec> getSignature(P *a, P *b, const G &g) {
-	for (auto &s : g.signatures) {
+	for (const auto &s : g.signatures) {
 		if (s.first == a) {
-			for (auto &sa : s.second) {
+			for (const auto &sa : s.second) {
 				if (sa.first == b) {
 					return {true, sa.second};
 				}
@@ -415,7 +400,7 @@ std::pair<bool, typename G::InfluenceVec> getSignature(P *a, P *b, const G &g) {
 template <typename P, typename G>
 std::vector<std::pair<typename G::Protein *, typename G::InfluenceVec>> getInfluencesTo(
     P *a, const G &g) {
-	for (auto &s : g.signatures)
+	for (const auto &s : g.signatures)
 		if (s.first == a) return s.second;
 	return {};
 }
@@ -428,6 +413,41 @@ template <class T> void printInfluences(const T &I) {
 }
 
 template <typename T> void scenario1() {
+	for (int i = 0; i < 50; ++i) {
+		MGRN<T> g0;
+		g0.params = {{12.0, 1.0}};
+		g0.addProtein(ProteinType::input, "A", {{{0.69, 0.1, 0.2}}, 0.5, true, false, false});
+		g0.addProtein(ProteinType::output, "D", {{{0.1, 0.2, 0.3}}, 0.5, false, true, false});
+		MGRN<T> g1tmp;
+		g1tmp.params = {{7.0, 1.2}};
+		g1tmp.addProtein({{{0.7, 0.2, 0.33}}, 0.5, true, false, false});  // E
+		g1tmp.addProtein({{{0.9, 0.1, 0.65}}, 0.5, false, true, false});  // F
+		g0.addSubNet(g1tmp);
+		auto g1 = g0;
+		REQUIRE(g0.allProteinsPtr.size() == g1.allProteinsPtr.size());
+		REQUIRE(g0.subNets[0].allProteinsPtr.size() == g1.subNets[0].allProteinsPtr.size());
+		REQUIRE(g0.signatures.size() == g1.signatures.size());
+		for (size_t k = 0; k < g0.signatures.size(); ++k)
+			REQUIRE(g0.signatures[k].second.size() == g1.signatures[k].second.size());
+		for (size_t k = 0; k < g0.subNets[0].signatures.size(); ++k)
+			REQUIRE(g0.subNets[0].signatures[k].second.size() ==
+			        g1.subNets[0].signatures[k].second.size());
+		g0.reset();
+		g1.reset();
+		REQUIRE(g0 == g1);
+		g0.step(10);
+		g1.step(10);
+		INFO("G0 signatures = " << printSignatures(g0));
+		INFO("G1 signatures = " << printSignatures(g1));
+		REQUIRE(g0 == g1);
+		auto g2 = g1;
+		REQUIRE(g0 == g2);
+		g0.step(100);
+		g1.step(100);
+		g2.step(100);
+		REQUIRE(g0 == g1);
+		REQUIRE(g0 == g2);
+	}
 	MGRN<T> g0;
 	g0.params = {{12.0, 1.0}};
 	g0.addProtein(ProteinType::input, "A", {{{0.69, 0.1, 0.2}}, 0.5, true, false, false});
@@ -619,3 +639,6 @@ template <typename T> void scenario1() {
 }
 
 TEST_CASE("Scenarios", "[mgrn]") { scenario1<MGClassic>(); }
+TEST_CASE("MGRN random declaration, init & serialization", "[mgrn]") {
+	for (int i = 0; i < 500; ++i) testMGRN<MGClassic>();
+}
