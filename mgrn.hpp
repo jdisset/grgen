@@ -41,12 +41,12 @@ template <typename Implem> struct MGRN {
 	double MODIF_PROT_RATE = 10;
 	double ADD_PROT_RATE = 1;
 	double DEL_PROT_RATE = 1;
-	double ADD_GRN_RATE = 0.1;
-	double DEL_GRN_RATE = 0.05;
+	double ADD_GRN_RATE = 0.0;
+	double DEL_GRN_RATE = 0.0;
 	// crossover
 	double ALIGN_TRESHOLD = 0.5;
 	double APPEND_NON_ALIGNED = 0.2;
-	unsigned int MAX_REGULS = 20;
+	unsigned int MAX_REGULS = 40;
 
 	MGRN() : master(this), parent(nullptr) {}
 	MGRN& operator=(const MGRN& g) {
