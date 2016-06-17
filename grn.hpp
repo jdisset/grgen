@@ -79,7 +79,7 @@ template <typename Implem> class GRN {
 		implem.updateSignatures(*this);
 	}
 
-	vector<vector<InfluenceVec>> getSignatures() { return signatures; }
+	vector<vector<InfluenceVec>> getSignatures() const { return signatures; }
 
 	void step(unsigned int nbSteps = 1) { implem.step(*this, nbSteps); }
 
@@ -128,6 +128,7 @@ template <typename Implem> class GRN {
 		for (auto& p : actualProteins) p.reset();
 	}
 
+	void setParam(const decltype(params)& p) { params = p; }
 	void setParam(size_t i, double val) {
 		if (i < params.size()) params[i] = val;
 	}
