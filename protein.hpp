@@ -178,6 +178,18 @@ struct HiProtein {
 		c = con;
 	}
 
+	// void mutate() {
+	// std::uniform_int_distribution<size_t> dInt(0, nbCoords + 2);
+	// size_t mutated = dInt(grnRand);
+	// if (mutated < coords.size())
+	// coords[mutated] = getRandomCoord();
+	// else if (modifiable) {
+	// if (mutated == coords.size())
+	// input = !input;
+	// else
+	// output = !output;
+	//}
+	//}
 	void mutate() {
 		std::uniform_int_distribution<size_t> dInt(0, nbCoords);
 		size_t mutated = dInt(grnRand);
