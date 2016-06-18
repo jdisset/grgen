@@ -44,7 +44,7 @@ template <typename Implem> struct MGRN {
 	double ADD_GRN_RATE = 0.0;
 	double DEL_GRN_RATE = 0.0;
 	// crossover
-	double ALIGN_TRESHOLD = 0.5;
+	static constexpr double ALIGN_TRESHOLD = 0.2;
 	double APPEND_NON_ALIGNED = 0.2;
 	unsigned int MAX_REGULS = 40;
 
@@ -54,8 +54,7 @@ template <typename Implem> struct MGRN {
 		outputProteins = g.outputProteins;
 		params = g.params;
 		actualProteins = g.actualProteins;
-		master = this;
-		parent = nullptr;
+		if (!master) master = this;
 		subNets.clear();
 		signatures.clear();
 		allProteinsPtr.clear();
@@ -243,10 +242,12 @@ template <typename Implem> struct MGRN {
 		double lastTr = 0.0;
 		while (lastTr <= threshold && aId.size() && bId.size()) {
 			pair<size_t, size_t> best = {0, 0};
-			double minDist = T::relativeDistance(a[aId[best.first]], b[bId[best.second]]);
+			double minDist = std::remove_pointer<T>::type::relativeDistance(
+			    cref(a[aId[best.first]]), cref(b[bId[best.second]]));
 			for (size_t i = 1; i < aId.size(); ++i) {
 				for (size_t j = 1; j < bId.size(); ++j) {
-					double dist = T::relativeDistance(a[aId[i]], b[bId[j]]);
+					double dist = std::remove_pointer<T>::type::relativeDistance(cref(a[aId[i]]),
+					                                                             cref(b[bId[j]]));
 					if (dist < minDist) {
 						minDist = dist;
 						best = {i, j};
@@ -282,6 +283,7 @@ template <typename Implem> struct MGRN {
 		if (divisor > 0) dProt = dProt / divisor;
 		if (a.subNets.size() + b.subNets.size() == 0) return dProt;
 
+		// then the subNets. (distance is sum of aligned net's distances + nb of unaligned)
 		double dG = 0.0;
 		auto alignedGrns = getAligned(a.subNets, b.subNets);
 		for (auto& al : std::get<0>(alignedGrns)) dG += std::get<2>(al);
@@ -475,7 +477,7 @@ template <typename Implem> struct MGRN {
 		master->updateSubNetsPtrsAndSignatures();
 	}
 
-	std::vector<MGRN<Implem>*> getListOfAllGRNs() const {
+	std::vector<MGRN<Implem>*> getListOfAllGRNs(bool includeMaster = true) const {
 		// returns all GRNS present in the whole network
 		std::unordered_set<MGRN<Implem>*> visited;
 		std::vector<MGRN<Implem>*> toVisit;
@@ -489,7 +491,8 @@ template <typename Implem> struct MGRN {
 		}
 		std::vector<MGRN<Implem>*> result;
 		result.reserve(visited.size());
-		for (auto g : visited) result.push_back(g);
+		for (auto g : visited)
+			if (includeMaster || g != master) result.push_back(g);
 		return result;
 	}
 
@@ -692,9 +695,21 @@ template <typename Implem> struct MGRN {
 		return MGRN::crossover(*this, other);
 	}
 
+	// first version : only swaping the most aligned sub
 	static MGRN<Implem> crossover(const MGRN<Implem>& g0, const MGRN<Implem>& g1) {
 		std::uniform_int_distribution<int> d(0, 1);
 		return d(grnRand) == 1 ? g0 : g1;
+		auto child0 = g0;
+		auto allG0 = child0.getListOfAllGRNs(false);
+		auto allG1 = g1.getListOfAllGRNs(false);
+		auto aligned = std::get<0>(getAligned(allG0, allG1, ALIGN_TRESHOLD));
+		if (aligned.size() > 0) {
+			// now we swap the most aligned one.
+			std::uniform_int_distribution<size_t> dInt(0, aligned.size() - 1);
+			auto& toSwap = aligned[dInt(grnRand)];
+			*allG0[std::get<0>(toSwap)] = *allG1[std::get<1>(toSwap)];
+		}
+		return child0;
 	};
 };
 #endif

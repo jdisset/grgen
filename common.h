@@ -1,9 +1,9 @@
 #ifndef COMMON_H
 #define COMMON_H
+#include <chrono>
 #include <iostream>
 #include <random>
 #include "json/json.hpp"
-#include <chrono>
 
 #define INIT_CONCENTRATION 0.5
 
@@ -49,4 +49,6 @@ template <typename I, typename T, unsigned int maxn> struct stackUmap {
 	size_t size;
 };
 
+template <typename T> const T& cref(T* t) { return *t; }  // turn ptr into ref
+template <typename T> const T& cref(T& t) { return t; }   // cref, charogne !
 #endif

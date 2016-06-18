@@ -678,7 +678,7 @@ template <typename T> void comparison() {
 }
 
 // TEST_CASE("Scenarios", "[mgrn]") { scenario1<MGClassic>(); }
-// TEST_CASE("Dynamique", "[mgrn]") { comparison<MGClassic>(); }
+//TEST_CASE("Dynamique", "[mgrn]") { comparison<MGClassic>(); }
 TEST_CASE("MGRN random declaration, init & serialization", "[mgrn]") {
-	for (int i = 0; i < 0; ++i) testMGRN<MGClassic>();
+	for (int i = 0; i < 100; ++i) testMGRN<MGClassic>();
 }
