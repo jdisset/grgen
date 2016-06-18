@@ -31,18 +31,18 @@ template <typename Implem> struct MGRN {
 	size_t firstOutputPtrIndex = 0;
 	vector<Protein> actualProteins;
 	vector<MGRN> subNets;
-	signature_t signatures;  // stores the influence of one protein onto the others (p0
+	signature_t signatures;  // stores the influence of one protein onto the others
 	MGRN* master = nullptr;
 	MGRN* parent = nullptr;
 	Implem implem;
 
 	// mutation & crossover params
 	// mutation
-	double MODIF_PROT_RATE = 10;
+	double MODIF_PROT_RATE = 5;
 	double ADD_PROT_RATE = 1;
 	double DEL_PROT_RATE = 1;
-	double ADD_GRN_RATE = 0.0;
-	double DEL_GRN_RATE = 0.0;
+	double ADD_GRN_RATE = 0.1;
+	double DEL_GRN_RATE = 0.1;
 	// crossover
 	static constexpr double ALIGN_TRESHOLD = 0.2;
 	double APPEND_NON_ALIGNED = 0.2;
