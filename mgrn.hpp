@@ -44,7 +44,7 @@ template <typename Implem> struct MGRN {
 	double ADD_GRN_RATE = 0.1;
 	double DEL_GRN_RATE = 0.1;
 	// crossover
-	static constexpr double ALIGN_TRESHOLD = 0.2;
+	static constexpr double ALIGN_TRESHOLD = 0.8;
 	double APPEND_NON_ALIGNED = 0.2;
 	unsigned int MAX_REGULS = 40;
 
@@ -539,6 +539,21 @@ template <typename Implem> struct MGRN {
 				deleteProtein(regulList[dp(grnRand)]);
 			}
 		}
+	}
+	size_t getProteinSize(ProteinType ptype) {
+		size_t i = 0;
+		size_t r = 0;
+		size_t o = 0;
+		auto prots = getListOfAllProteins();
+		for (const auto& pr : prots) {
+			const auto& p = *pr.second;
+			if (p.input) ++i;
+			if (p.output) ++o;
+			if ((p.input && p.output) || (!p.input && !p.output)) ++r;
+		}
+		if (ptype == ProteinType::input) return i;
+		if (ptype == ProteinType::output) return o;
+		return r;
 	}
 
 	void deleteProtein(size_t i) {
