@@ -1,9 +1,9 @@
 #define CATCH_CONFIG_MAIN
-#include "catch.hpp"
+#include "../classic.hpp"
 #include "../common.h"
 #include "../grn.hpp"
-#include "../classic.hpp"
 #include "../json/json.hpp"
+#include "catch.hpp"
 
 TEST_CASE("Proteins are ok", "[proteins]") {
 	Protein<1> p0({{21.1}}, 0.5);
@@ -160,12 +160,13 @@ template <typename T> void savedReloadedGRN() {
 		proteinsCaptures.push_back(grn.getActualProteinsCopy());
 		grn.step(10);
 		proteinsCaptures.push_back(grn.getActualProteinsCopy());
-		auto grnstr10 = grn.toJSON();
-		REQUIRE(grnstr10 == grn.toJSON());
+		auto grnstr10 = grn.serialize();
+		REQUIRE(grnstr10 == grn.serialize());
 		grn.step(20);
 		GRN<T> grncopy(grnstr10);
-		REQUIRE(grncopy.toJSON() == grnstr10);
+		REQUIRE(grncopy.serialize() == grnstr10);
 		REQUIRE(grn.getNbProteins() == grncopy.getNbProteins());
+		REQUIRE(GRN<T>::getDistance(grncopy, grnstr10) == 0);
 		auto pcopy = grncopy.getActualProteinsCopy();
 		for (size_t p = 0; p < pcopy.size(); ++p) REQUIRE(pcopy[p] == proteinsCaptures[1][p]);
 		grncopy.reset();
@@ -191,10 +192,10 @@ template <typename T> void deterministicGRN() {
 		proteinsCaptures.push_back(grn.getActualProteinsCopy());
 		grn.step(9);
 		proteinsCaptures.push_back(grn.getActualProteinsCopy());
-		auto grnstr10 = grn.toJSON();
+		auto grnstr10 = grn.serialize();
 		grn.step(990);
 		proteinsCaptures.push_back(grn.getActualProteinsCopy());
-		GRN<T> grncopy(grn.toJSON());
+		GRN<T> grncopy(grn.serialize());
 		grncopy.reset();
 		vector<vector<Prot>> proteinsCapturesCopy;
 		proteinsCapturesCopy.push_back(grncopy.getActualProteinsCopy());
@@ -210,7 +211,7 @@ template <typename T> void deterministicGRN() {
 			}
 		}
 		GRN<T> other(grnstr10);
-		REQUIRE(other.toJSON() == grnstr10);
+		REQUIRE(other.serialize() == grnstr10);
 		auto pcopy = other.getActualProteinsCopy();
 		for (size_t p = 0; p < proteinsCaptures[2].size(); ++p) {
 			REQUIRE(pcopy[p] == proteinsCaptures[2][p]);

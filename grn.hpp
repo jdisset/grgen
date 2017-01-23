@@ -3,9 +3,9 @@
 #include <assert.h>
 #include <array>
 #include <map>
-#include <unordered_map>
-#include <string>
 #include <sstream>
+#include <string>
+#include <unordered_map>
 #include "common.h"
 
 using std::array;
@@ -251,6 +251,64 @@ template <typename Implem> class GRN {
 	}
 
 	GRN crossover(const GRN& other) { return GRN::crossover(*this, other); }
+
+	static double getDistance(const GRN& g0, const GRN& g1) {
+		assert(g0.proteinsRefs.size() == g1.proteinsRefs.size());
+		assert(g0.params.size() == g1.params.size());
+		assert(g0.proteinsRefs[to_underlying(ProteinType::input)].size() ==
+		       g1.proteinsRefs[to_underlying(ProteinType::input)].size());
+		assert(g0.proteinsRefs[to_underlying(ProteinType::output)].size() ==
+		       g1.proteinsRefs[to_underlying(ProteinType::output)].size());
+
+		double pDist = 0, iDist = 0, oDist = 0, rDist = 0;
+		// abs(beta1 - beta0)/(bMax - bMin) , same for delta
+		for (size_t i = 0; i < g0.params.size(); ++i) {
+			pDist += abs(g0.params[i] - g1.params[i]) /
+			         (Implem::paramsLimits()[i].second - Implem::paramsLimits()[i].first);
+		}
+
+		// inputs
+		for (auto& i : g0.proteinsRefs[to_underlying(ProteinType::input)]) {
+			iDist += g0.getProtein_const(ProteinType::input, i.first)
+			             .getDistanceWith(g1.getProtein_const(ProteinType::input, i.first));
+		}
+		// outputs
+		for (auto& i : g0.proteinsRefs[to_underlying(ProteinType::output)]) {
+			oDist += g0.getProtein_const(ProteinType::output, i.first)
+			             .getDistanceWith(g1.getProtein_const(ProteinType::output, i.first));
+		}
+
+		// reguls
+		auto r0 = g0.getProteinNames(ProteinType::regul);
+		auto r1 = g1.getProteinNames(ProteinType::regul);
+		while (r0.size() > 0 && r1.size() > 0) {
+			pair<string, string> closest;
+			double minDist = std::numeric_limits<double>::infinity();
+			for (const auto& i : r0) {
+				for (const auto& j : r1) {
+					double dist = g0.getProtein_const(ProteinType::regul, i)
+					                  .getDistanceWith(g1.getProtein_const(ProteinType::regul, j));
+					if (dist < minDist) {
+						closest = {i, j};
+						minDist = dist;
+					}
+				}
+			}
+			assert(minDist < std::numeric_limits<double>::infinity());
+			rDist += minDist;
+			r0.erase(std::remove(r0.begin(), r0.end(), closest.first), r0.end());
+			r1.erase(std::remove(r1.begin(), r1.end(), closest.second), r1.end());
+		}
+		rDist +=
+		    Protein::getMaxDistance() *
+		    static_cast<double>(r0.size() + r1.size());  // we add the non aligned distances
+		double normalizationCoef =
+		    g0.params.size() + g0.proteinsRefs[to_underlying(ProteinType::input)].size() +
+		    g0.proteinsRefs[to_underlying(ProteinType::output)].size() +
+		    std::max(g0.proteinsRefs[to_underlying(ProteinType::regul)].size(),
+		             g1.proteinsRefs[to_underlying(ProteinType::regul)].size());
+		return (pDist + iDist + rDist + oDist) / normalizationCoef;
+	}
 
 	static GRN crossover(const GRN& g0, const GRN& g1) {
 		assert(g0.proteinsRefs.size() == g1.proteinsRefs.size());
