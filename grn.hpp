@@ -33,6 +33,7 @@ template <typename Implem> class GRN {
 
  public:
 	using Protein = typename Implem::Protein_t;
+	using ProteinType = ProteinType;
 	using json = nlohmann::json;
 	using InfluenceVec = array<double, Implem::nbSignatureParams>;
 	template <typename A, typename B> using umap = std::unordered_map<A, B>;
@@ -96,6 +97,9 @@ template <typename Implem> class GRN {
 			exit(0);
 		}
 	}
+	double getOutputConcentration(const string& name) const {
+		return getProteinConcentration(name, ProteinType::output);
+	}
 
 	size_t getFirstRegulIndex() { return getProteinSize(ProteinType::input); }
 	size_t getFirstOutputIndex() {
@@ -134,6 +138,10 @@ template <typename Implem> class GRN {
 
 	void setProteinConcentration(const string& name, ProteinType t, double c) {
 		getProtein(t, name).c = c;
+	}
+
+	void setInputConcentration(const string& name, double c) {
+		getProtein(ProteinType::input, name).c = c;
 	}
 
 	vector<string> getProteinNames(ProteinType t) const {
