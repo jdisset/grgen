@@ -33,7 +33,7 @@ template <typename Implem> class GRN {
 
  public:
 	using Protein = typename Implem::Protein_t;
-	using ProteinType = ProteinType;
+	using ProteinType_t = ProteinType;
 	using json = nlohmann::json;
 	using InfluenceVec = array<double, Implem::nbSignatureParams>;
 	template <typename A, typename B> using umap = std::unordered_map<A, B>;
