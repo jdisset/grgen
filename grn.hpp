@@ -117,10 +117,15 @@ template <typename Implem> class GRN {
 	int getCurrentStep() const { return currentStep; }
 
 	Protein& getProtein(ProteinType t, const string& name) {
-		return actualProteins[proteinsRefs[to_underlying(t)][name]];
+		size_t id = proteinsRefs[to_underlying(t)].at(name);
+		if (id >= actualProteins.size()) throw std::runtime_error("unknown protein");
+		return actualProteins[id];
 	}
+
 	Protein getProtein_const(ProteinType t, const string& name) const {
-		return actualProteins[proteinsRefs[to_underlying(t)].at(name)];
+		size_t id = proteinsRefs[to_underlying(t)].at(name);
+		if (id >= actualProteins.size()) throw std::runtime_error("unknown protein");
+		return actualProteins[id];
 	}
 	vector<Protein> getActualProteinsCopy() const { return actualProteins; }
 	vector<Protein>& getActualProteins() { return actualProteins; }
