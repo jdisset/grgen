@@ -88,7 +88,7 @@ struct Protein {
 		return sqrt(std::pow((maxCoord - minCoord), 2) * nbCoords);
 	}
 
-	double getDistanceWith(const Protein &p) {
+	double getDistanceWith(const Protein &p) const {
 		double sum = 0;
 		for (size_t i = 0; i < nbCoords; ++i) {
 			sum += std::pow(
