@@ -375,7 +375,7 @@ template <typename Implem> class GRN {
 		updateSignatures();
 	}
 
-	string toJSON() const {
+	string serialize() const {
 		json protObj;
 		for (size_t t = 0; t < proteinsRefs.size(); ++t) {
 			json pr;
