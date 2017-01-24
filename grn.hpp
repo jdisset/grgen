@@ -19,9 +19,9 @@ template <typename Implem> class GRN {
 	friend Implem;
 	struct GAConfiguration {
 		// crossover
-		static constexpr double ALIGN_TRESHOLD = 0.4;
+		static constexpr double ALIGN_TRESHOLD = 0.2;
 		static constexpr double APPEND_NON_ALIGNED = 1.0;
-		static constexpr unsigned int MAX_REGULS = 70;
+		static constexpr unsigned int MAX_REGULS = 50;
 
 		// mutation
 		double MODIF_RATE = 0.25;
@@ -41,7 +41,7 @@ template <typename Implem> class GRN {
 
  protected:
 	array<double, Implem::nbParams> params{};  // alpha, beta, ...
-	array<map<string, size_t>, 3> proteinsRefs;
+	array<std::unordered_map<string, size_t>, 3> proteinsRefs;
 	vector<Protein> actualProteins;
 	vector<vector<InfluenceVec>>
 	    signatures;  // stores the influence of one protein onto the others (p0
@@ -218,7 +218,7 @@ template <typename Implem> class GRN {
 
 	void updateRegulNames() {
 		int id = 0;
-		map<string, size_t> newReguls;
+		std::unordered_map<string, size_t> newReguls;
 		for (auto& i : proteinsRefs[to_underlying(ProteinType::regul)]) {
 			ostringstream name;
 			name << "r" << id++;
@@ -401,15 +401,17 @@ template <typename Implem> class GRN {
 				offspring.addProtein(ProteinType::regul, name.str(), i.second);
 		}
 		// append the non aligned ones either from r0 or r1
-		auto diceRoll = d5050(grnRand);
-		const auto& r = diceRoll ? r0 : r1;
-		const auto& g = diceRoll ? g0 : g1;
-		for (auto& i : r) {
-			if (offspring.getProteinSize(ProteinType::regul) < GAConfiguration::MAX_REGULS) {
-				ostringstream name;
-				name << "r" << id++;
-				offspring.addProtein(ProteinType::regul, name.str(),
-				                     g.getProtein_const(ProteinType::regul, i));
+		if (d5050(grnRand)) {
+			auto diceRoll = d5050(grnRand);
+			const auto& r = diceRoll ? r0 : r1;
+			const auto& g = diceRoll ? g0 : g1;
+			for (auto& i : r) {
+				if (offspring.getProteinSize(ProteinType::regul) < GAConfiguration::MAX_REGULS) {
+					ostringstream name;
+					name << "r" << id++;
+					offspring.addProtein(ProteinType::regul, name.str(),
+					                     g.getProtein_const(ProteinType::regul, i));
+				}
 			}
 		}
 		offspring.updateSignatures();
