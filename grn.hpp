@@ -21,7 +21,7 @@ template <typename Implem> class GRN {
 		// crossover
 		static constexpr double ALIGN_TRESHOLD = 0.4;
 		static constexpr double APPEND_NON_ALIGNED = 1.0;
-		static constexpr unsigned int MAX_REGULS = 100;
+		static constexpr unsigned int MAX_REGULS = 70;
 
 		// mutation
 		double MODIF_RATE = 0.25;
