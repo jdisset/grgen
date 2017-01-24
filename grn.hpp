@@ -19,14 +19,14 @@ template <typename Implem> class GRN {
 	friend Implem;
 	struct GAConfiguration {
 		// crossover
-		static constexpr double ALIGN_TRESHOLD = 0.5;
-		static constexpr double APPEND_NON_ALIGNED = 0.2;
-		static constexpr unsigned int MAX_REGULS = 50;
+		static constexpr double ALIGN_TRESHOLD = 0.4;
+		static constexpr double APPEND_NON_ALIGNED = 1.0;
+		static constexpr unsigned int MAX_REGULS = 100;
 
 		// mutation
-		double MODIF_RATE = 0.8;
-		double ADD_RATE = 0.1;
-		double DEL_RATE = 0.1;
+		double MODIF_RATE = 0.25;
+		double ADD_RATE = 0.5;
+		double DEL_RATE = 0.25;
 	};
 
 	friend Implem;
@@ -400,25 +400,16 @@ template <typename Implem> class GRN {
 			else
 				offspring.addProtein(ProteinType::regul, name.str(), i.second);
 		}
-		// append the rest (with a certain probability)
-		for (auto& i : r0) {
+		// append the non aligned ones either from r0 or r1
+		auto diceRoll = d5050(grnRand);
+		const auto& r = diceRoll ? r0 : r1;
+		const auto& g = diceRoll ? g0 : g1;
+		for (auto& i : r) {
 			if (offspring.getProteinSize(ProteinType::regul) < GAConfiguration::MAX_REGULS) {
-				if (dReal(grnRand) < GAConfiguration::APPEND_NON_ALIGNED) {
-					ostringstream name;
-					name << "r" << id++;
-					offspring.addProtein(ProteinType::regul, name.str(),
-					                     g0.getProtein_const(ProteinType::regul, i));
-				}
-			}
-		}
-		for (auto& i : r1) {
-			if (offspring.getProteinSize(ProteinType::regul) < GAConfiguration::MAX_REGULS) {
-				if (dReal(grnRand) < GAConfiguration::APPEND_NON_ALIGNED) {
-					ostringstream name;
-					name << "r" << id++;
-					offspring.addProtein(ProteinType::regul, name.str(),
-					                     g1.getProtein_const(ProteinType::regul, i));
-				}
+				ostringstream name;
+				name << "r" << id++;
+				offspring.addProtein(ProteinType::regul, name.str(),
+				                     g.getProtein_const(ProteinType::regul, i));
 			}
 		}
 		offspring.updateSignatures();
