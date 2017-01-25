@@ -19,7 +19,7 @@ template <typename Implem> class GRN {
 	friend Implem;
 	struct GAConfiguration {
 		// crossover
-		static constexpr double ALIGN_TRESHOLD = 0.1;
+		static constexpr double ALIGN_TRESHOLD = 0.15;
 		static constexpr double APPEND_NON_ALIGNED = 1.0;
 		static constexpr unsigned int MAX_REGULS = 50;
 
@@ -405,19 +405,19 @@ template <typename Implem> class GRN {
 				offspring.addProtein(ProteinType::regul, name.str(), i.second);
 		}
 		// append the non aligned ones either from r0 or r1
-		if (d5050(grnRand)) {
-			auto diceRoll = d5050(grnRand);
-			const auto& r = diceRoll ? r0 : r1;
-			const auto& g = diceRoll ? g0 : g1;
-			for (auto& i : r) {
-				if (offspring.getProteinSize(ProteinType::regul) < GAConfiguration::MAX_REGULS) {
-					ostringstream name;
-					name << "r" << id++;
-					offspring.addProtein(ProteinType::regul, name.str(),
-					                     g.getProtein_const(ProteinType::regul, i));
-				}
+		// if (d5050(grnRand)) {
+		auto diceRoll = d5050(grnRand);
+		const auto& r = diceRoll ? r0 : r1;
+		const auto& g = diceRoll ? g0 : g1;
+		for (auto& i : r) {
+			if (offspring.getProteinSize(ProteinType::regul) < GAConfiguration::MAX_REGULS) {
+				ostringstream name;
+				name << "r" << id++;
+				offspring.addProtein(ProteinType::regul, name.str(),
+				                     g.getProtein_const(ProteinType::regul, i));
 			}
 		}
+		//}
 		offspring.updateSignatures();
 		return offspring;
 	}
