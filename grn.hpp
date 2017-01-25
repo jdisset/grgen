@@ -19,7 +19,7 @@ template <typename Implem> class GRN {
 	friend Implem;
 	struct GAConfiguration {
 		// crossover
-		static constexpr double ALIGN_TRESHOLD = 0.2;
+		static constexpr double ALIGN_TRESHOLD = 0.1;
 		static constexpr double APPEND_NON_ALIGNED = 1.0;
 		static constexpr unsigned int MAX_REGULS = 50;
 

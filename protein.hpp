@@ -3,12 +3,12 @@
 
 #include <assert.h>
 #include <array>
-#include <vector>
-#include <unordered_set>
-#include <string>
 #include <random>
+#include <string>
 #include <type_traits>
+#include <unordered_set>
 #include <utility>
+#include <vector>
 #include "common.h"
 
 #define MULTIPLE_MUTATION_PROBA 0.1
@@ -88,13 +88,19 @@ struct Protein {
 		return sqrt(std::pow((maxCoord - minCoord), 2) * nbCoords);
 	}
 
+	// double getDistanceWith(const Protein &p) const {
+	// double sum = 0;
+	// for (size_t i = 0; i < nbCoords; ++i) {
+	// sum += std::pow(
+	// static_cast<double>(coords.at(i)) - static_cast<double>(p.coords.at(i)), 2);
+	//}
+	// return sqrt(sum) / getMaxDistance();
+	//}
 	double getDistanceWith(const Protein &p) const {
-		double sum = 0;
-		for (size_t i = 0; i < nbCoords; ++i) {
-			sum += std::pow(
-			    static_cast<double>(coords.at(i)) - static_cast<double>(p.coords.at(i)), 2);
-		}
-		return sqrt(sum) / getMaxDistance();
+		return (0.75 * abs(p.coords.at(0) - coords.at(0)) +
+		        0.125 * (abs(p.coords.at(1) - coords.at(1)) +
+		                 abs(p.coords.at(2) - coords.at(2)))) /
+		       static_cast<double>(maxCoord - minCoord);
 	}
 };
 #endif
