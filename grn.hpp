@@ -101,8 +101,8 @@ template <typename Implem> class GRN {
 		return getProteinConcentration(name, ProteinType::output);
 	}
 
-	size_t getFirstRegulIndex() { return getProteinSize(ProteinType::input); }
-	size_t getFirstOutputIndex() {
+	size_t getFirstRegulIndex() const { return getProteinSize(ProteinType::input); }
+	size_t getFirstOutputIndex() const {
 		return getProteinSize(ProteinType::input) + getProteinSize(ProteinType::regul);
 	}
 
@@ -129,6 +129,7 @@ template <typename Implem> class GRN {
 	}
 	vector<Protein> getActualProteinsCopy() const { return actualProteins; }
 	vector<Protein>& getActualProteins() { return actualProteins; }
+	const vector<Protein>& getActualProteinsConst() const { return actualProteins; }
 
 	/**************************************
 	 *               SET
@@ -291,16 +292,18 @@ template <typename Implem> class GRN {
 			             .getDistanceWith(g1.getProtein_const(ProteinType::output, i.first));
 		}
 
-		// reguls
-		auto r0 = g0.getProteinNames(ProteinType::regul);
-		auto r1 = g1.getProteinNames(ProteinType::regul);
+		// faster version:
+		std::vector<size_t> r0(g0.getFirstOutputIndex() - g0.getFirstRegulIndex());
+		std::iota(std::begin(r0), std::end(r0), g0.getFirstRegulIndex());
+		std::vector<size_t> r1(g1.getFirstOutputIndex() - g1.getFirstRegulIndex());
+		std::iota(std::begin(r1), std::end(r1), g1.getFirstRegulIndex());
 		while (r0.size() > 0 && r1.size() > 0) {
-			pair<string, string> closest;
+			pair<size_t, size_t> closest;
 			double minDist = std::numeric_limits<double>::infinity();
 			for (const auto& i : r0) {
 				for (const auto& j : r1) {
-					double dist = g0.getProtein_const(ProteinType::regul, i)
-					                  .getDistanceWith(g1.getProtein_const(ProteinType::regul, j));
+					double dist = g0.getActualProteinsConst()[i].getDistanceWith(
+					    g1.getActualProteinsConst()[j]);
 					if (dist < minDist) {
 						closest = {i, j};
 						minDist = dist;
@@ -312,6 +315,7 @@ template <typename Implem> class GRN {
 			r0.erase(std::remove(r0.begin(), r0.end(), closest.first), r0.end());
 			r1.erase(std::remove(r1.begin(), r1.end(), closest.second), r1.end());
 		}
+
 		rDist +=
 		    Protein::getMaxDistance() *
 		    static_cast<double>(r0.size() + r1.size());  // we add the non aligned distances
